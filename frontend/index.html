@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ReviewGuard</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<style>
+:root {
+  --bg:#161b27;--surface:#1c2333;--card:#212840;--card2:#252d42;
+  --border:#2a344d;--border2:#313d58;
+  --green:#22c55e;--green-bg:rgba(34,197,94,0.14);--green-br:rgba(34,197,94,0.35);
+  --red:#ef4444;--red-bg:rgba(239,68,68,0.10);--red-br:rgba(239,68,68,0.30);
+  --yellow:#f59e0b;--blue:#3b82f6;--blue-bg:rgba(59,130,246,0.12);--blue-br:rgba(59,130,246,0.35);
+  --purple:#a855f7;--purple-bg:rgba(168,85,247,0.12);--purple-br:rgba(168,85,247,0.35);
+  --text:#e2e8f0;--muted:#8896b3;--dim:#4a5568;--white:#ffffff;
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+svg{display:inline-block;vertical-align:middle;flex-shrink:0;}
+.page{display:none;min-height:100vh;}
+.page.active{display:flex;}
+@keyframes pop{from{opacity:0;transform:translateY(22px);}to{opacity:1;transform:translateY(0);}}
+@keyframes fi{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,0.3);}50%{box-shadow:0 0 0 14px rgba(34,197,94,0);}}
+@keyframes shake{0%,100%{transform:translateX(0);}20%{transform:translateX(-6px);}40%{transform:translateX(6px);}60%{transform:translateX(-4px);}80%{transform:translateX(4px);}}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* SETUP */
+#setup-page{flex-direction:column;align-items:center;justify-content:flex-start;padding:20px;overflow-y:auto;}
+.setup-wrap{width:100%;max-width:500px;padding-bottom:40px;}
+.setup-hdr{text-align:center;padding:24px 0 28px;}
+.setup-ico{width:66px;height:66px;background:var(--purple-bg);border:2px solid var(--purple-br);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;}
+.setup-h{font-size:23px;font-weight:800;color:var(--white);letter-spacing:-.4px;margin-bottom:5px;}
+.setup-s{font-size:13px;color:var(--muted);line-height:1.6;}
+.sc{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:10px;}
+.sc-head{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
+.sc-num{min-width:28px;height:28px;background:var(--purple-bg);border:1px solid var(--purple-br);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--purple);}
+.sc-title{font-size:14px;font-weight:700;color:var(--white);}
+.sc-body{font-size:13px;color:var(--muted);line-height:1.75;}
+.sc-body strong{color:var(--text);}
+.ext-link{display:inline-flex;align-items:center;gap:6px;background:var(--blue-bg);border:1px solid var(--blue-br);border-radius:7px;padding:7px 13px;font-size:13px;font-weight:600;color:var(--blue);text-decoration:none;margin-top:10px;transition:background .2s;}
+.ext-link:hover{background:rgba(59,130,246,.22);}
+.code-box{background:var(--card);border:1px solid var(--border2);border-radius:8px;padding:11px 14px;font-family:monospace;font-size:12.5px;color:#93c5fd;margin-top:10px;line-height:1.9;white-space:pre-wrap;word-break:break-word;}
+.cfg-section{background:var(--surface);border:2px solid var(--purple-br);border-radius:14px;padding:18px;margin-bottom:10px;}
+.cfg-title{font-size:14px;font-weight:700;color:var(--purple);margin-bottom:3px;display:flex;align-items:center;gap:7px;}
+.cfg-sub{font-size:12px;color:var(--muted);margin-bottom:14px;}
+.cfg-f{margin-bottom:12px;}
+.cfg-f label{display:block;font-size:11.5px;font-weight:600;color:var(--muted);margin-bottom:5px;letter-spacing:.2px;}
+.cfg-f input{width:100%;background:var(--card);border:1.5px solid var(--border2);border-radius:8px;padding:10px 13px;color:var(--text);font-family:'Inter',sans-serif;font-size:13.5px;outline:none;transition:border-color .2s;}
+.cfg-f input:focus{border-color:var(--purple);box-shadow:0 0 0 3px rgba(168,85,247,.12);}
+.cfg-f input::placeholder{color:var(--dim);}
+.cfg-f input.valid{border-color:var(--green);}
+.save-btn{width:100%;background:var(--purple);color:#fff;border:none;border-radius:9px;padding:13px;font-family:'Inter',sans-serif;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .2s;margin-top:4px;}
+.save-btn:hover{background:#9333ea;transform:translateY(-1px);}
+.save-btn:disabled{opacity:.55;cursor:not-allowed;transform:none;}
+.skip-btn{width:100%;background:none;border:1px solid var(--border2);border-radius:9px;padding:10px;font-family:'Inter',sans-serif;font-size:13px;color:var(--muted);cursor:pointer;margin-top:8px;transition:all .2s;}
+.skip-btn:hover{border-color:var(--muted);color:var(--text);}
+.cfg-result{border-radius:8px;padding:9px 13px;font-size:13px;margin-top:10px;display:none;align-items:flex-start;gap:8px;}
+.cfg-result.show{display:flex;}
+.cfg-result.ok{background:var(--green-bg);border:1px solid var(--green-br);color:#86efac;}
+.cfg-result.fail{background:var(--red-bg);border:1px solid var(--red-br);color:#fca5a5;}
+
+/* AUTH */
+.auth-shell{width:100%;align-items:center;justify-content:center;padding:24px;}
+.auth-card{width:100%;max-width:400px;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:36px 30px 30px;box-shadow:0 20px 60px rgba(0,0,0,.4);animation:pop .4s cubic-bezier(.16,1,.3,1) both;}
+.auth-ico{width:60px;height:60px;background:var(--green-bg);border:2px solid var(--green-br);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 18px;}
+.auth-ico.admin-ico{background:var(--blue-bg);border-color:var(--blue-br);}
+.login-tabs{display:flex;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:4px;margin-bottom:20px;gap:4px;}
+.ltab{flex:1;background:none;border:none;color:var(--muted);font-family:'Inter',sans-serif;font-size:13px;font-weight:500;padding:8px 10px;border-radius:7px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .2s;}
+.ltab.active{background:var(--surface);color:var(--text);box-shadow:0 2px 8px rgba(0,0,0,.3);}
+.ltab.admin-tab.active{color:var(--blue);}
+.auth-title{text-align:center;font-size:21px;font-weight:700;color:var(--white);margin-bottom:4px;letter-spacing:-.3px;}
+.auth-sub{text-align:center;font-size:13px;color:var(--muted);margin-bottom:22px;line-height:1.5;}
+.fg{margin-bottom:14px;}
+.fl{display:block;font-size:12px;font-weight:500;color:var(--muted);margin-bottom:6px;}
+.fw{position:relative;display:flex;align-items:center;}
+.fi{position:absolute;left:12px;color:var(--dim);pointer-events:none;display:flex;align-items:center;}
+.finput{width:100%;background:var(--card);border:1.5px solid var(--border2);border-radius:9px;padding:11px 11px 11px 38px;color:var(--text);font-family:'Inter',sans-serif;font-size:14px;outline:none;transition:border-color .2s,box-shadow .2s;}
+.finput::placeholder{color:var(--dim);}
+.finput:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(34,197,94,.12);}
+.finput.admin-input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(59,130,246,.12);}
+.eyebtn{position:absolute;right:11px;background:none;border:none;color:var(--dim);cursor:pointer;padding:2px;display:flex;align-items:center;transition:color .2s;}
+.eyebtn:hover{color:var(--text);}
+.btnp{width:100%;background:var(--green);color:#000;border:none;border-radius:9px;padding:12px;font-family:'Inter',sans-serif;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .2s;margin-top:4px;}
+.btnp:hover{background:#16a34a;transform:translateY(-1px);box-shadow:0 8px 24px rgba(34,197,94,.3);}
+.btnp:disabled{opacity:.6;cursor:not-allowed;transform:none;box-shadow:none;}
+.btnp.admin-btn{background:var(--blue);color:#fff;}
+.btnp.admin-btn:hover{background:#2563eb;box-shadow:0 8px 24px rgba(59,130,246,.3);}
+.auth-sw{text-align:center;margin-top:16px;font-size:13px;color:var(--muted);}
+.auth-sw a{color:var(--green);font-weight:600;text-decoration:none;cursor:pointer;}
+.auth-sw a:hover{text-decoration:underline;}
+.ferr{font-size:12px;color:#fca5a5;margin-top:4px;display:none;}
+.ferr.show{display:block;}
+.errbox{background:var(--red-bg);border:1px solid var(--red-br);border-radius:8px;padding:9px 13px;font-size:13px;color:#fca5a5;margin-bottom:12px;display:none;}
+.errbox.show{display:block;}
+.admin-hint{background:var(--blue-bg);border:1px solid var(--blue-br);border-radius:8px;padding:9px 13px;font-size:12px;color:#93c5fd;margin-bottom:14px;display:flex;align-items:center;gap:7px;}
+
+/* OTP */
+#verify-wait-page{flex-direction:column;align-items:center;justify-content:center;padding:20px;}
+.vw-card{width:100%;max-width:420px;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:36px 28px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.4);animation:pop .4s cubic-bezier(.16,1,.3,1) both;}
+.mail-ico{width:78px;height:78px;background:var(--green-bg);border:2px solid var(--green-br);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;animation:pulse 2s ease-in-out infinite;}
+.vw-title{font-size:21px;font-weight:700;color:var(--white);margin-bottom:7px;letter-spacing:-.3px;}
+.vw-sub{font-size:13.5px;color:var(--muted);line-height:1.6;margin-bottom:4px;}
+.vw-email{display:inline-block;background:var(--card);border:1px solid var(--border2);border-radius:8px;padding:6px 16px;font-size:14px;font-weight:600;color:var(--green);margin:10px 0 20px;}
+.vw-steps{background:var(--card);border:1px solid var(--border);border-radius:11px;padding:14px;text-align:left;margin-bottom:20px;}
+.vw-step{display:flex;align-items:flex-start;gap:10px;padding:6px 0;border-bottom:1px solid var(--border);}
+.vw-step:last-child{border-bottom:none;padding-bottom:0;}
+.vw-step-n{min-width:22px;height:22px;background:var(--green-bg);border:1px solid var(--green-br);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--green);}
+.vw-step-t{font-size:12.5px;color:var(--muted);line-height:1.5;}
+.vw-step-t strong{color:var(--text);}
+.otp-lbl{font-size:11px;font-weight:700;color:var(--muted);margin-bottom:10px;letter-spacing:.5px;}
+.otp-inputs{display:flex;gap:9px;justify-content:center;margin-bottom:10px;}
+.otp-box{width:48px;height:54px;background:var(--card);border:2px solid var(--border2);border-radius:10px;font-size:22px;font-weight:700;color:var(--white);text-align:center;font-family:'Inter',sans-serif;outline:none;transition:border-color .2s,box-shadow .2s;caret-color:var(--green);}
+.otp-box:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(34,197,94,.12);}
+.otp-box.filled{border-color:rgba(34,197,94,.5);background:var(--card2);}
+.otp-box.shake{animation:shake .4s ease;}
+.otp-err{font-size:13px;color:#fca5a5;margin-bottom:10px;display:none;text-align:center;}
+.otp-err.show{display:block;}
+.verify-btn{width:100%;background:var(--green);color:#000;border:none;border-radius:9px;padding:12px;font-family:'Inter',sans-serif;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .2s;margin-bottom:12px;}
+.verify-btn:hover{background:#16a34a;transform:translateY(-1px);}
+.resend-row{display:flex;align-items:center;justify-content:center;gap:7px;font-size:13px;color:var(--muted);margin-bottom:10px;}
+.resend-link{color:var(--green);font-weight:600;cursor:pointer;background:none;border:none;font-family:'Inter',sans-serif;font-size:13px;}
+.resend-link:hover{text-decoration:underline;}
+.resend-link:disabled{color:var(--dim);cursor:not-allowed;text-decoration:none;}
+.back-su{background:none;border:1px solid var(--border2);border-radius:8px;color:var(--muted);font-family:'Inter',sans-serif;font-size:13px;padding:8px 16px;cursor:pointer;transition:all .2s;width:100%;}
+.back-su:hover{border-color:var(--muted);color:var(--text);}
+
+/* DASHBOARD */
+#dash-page{flex-direction:column;}
+.dash-body{width:100%;max-width:480px;margin:0 auto;padding:0 0 48px;}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:18px 16px 14px;}
+.brand{font-size:19px;font-weight:800;color:var(--white);letter-spacing:-.3px;}
+.topright{display:flex;align-items:center;gap:10px;}
+.welcome{font-size:13px;color:var(--muted);}
+.welcome b{color:var(--green);font-weight:600;}
+.welcome b.admin-name{color:var(--blue);}
+.logoutbtn{display:flex;align-items:center;gap:5px;background:none;border:1px solid var(--border2);border-radius:8px;color:var(--muted);font-family:'Inter',sans-serif;font-size:12px;font-weight:500;padding:6px 10px;cursor:pointer;transition:all .2s;}
+.logoutbtn:hover{border-color:var(--red);color:var(--red);}
+.prod-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px;margin:0 16px 12px;display:flex;align-items:center;gap:14px;}
+.prod-thumb{width:56px;height:56px;background:var(--card2);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:25px;flex-shrink:0;}
+.prod-name{font-size:15px;font-weight:700;color:var(--white);margin-bottom:3px;}
+.prod-desc{font-size:12px;color:var(--muted);margin-bottom:6px;}
+.prod-stars{display:flex;align-items:center;gap:2px;}
+.sf{color:var(--yellow);font-size:14px;}
+.se{color:var(--border2);font-size:14px;}
+.rcount{font-size:12px;color:var(--muted);margin-left:5px;}
+.inp-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:15px;margin:0 16px 12px;}
+.post-as{font-size:13px;color:var(--muted);margin-bottom:9px;}
+.post-as b{color:var(--green);font-weight:600;}
+.rv-ta{width:100%;background:var(--card);border:1.5px solid var(--border);border-radius:9px;padding:12px;color:var(--text);font-family:'Inter',sans-serif;font-size:14px;resize:none;height:92px;outline:none;transition:border-color .2s;}
+.rv-ta:focus{border-color:var(--green);}
+.rv-ta::placeholder{color:var(--dim);}
+.inp-foot{display:flex;align-items:center;justify-content:space-between;margin-top:9px;}
+.cc{font-size:12px;color:var(--dim);}
+.subbtn{background:var(--green);color:#000;border:none;border-radius:9px;padding:8px 16px;font-family:'Inter',sans-serif;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;transition:all .2s;}
+.subbtn:hover{background:#16a34a;transform:translateY(-1px);}
+.subbtn:disabled{opacity:.6;cursor:not-allowed;transform:none;}
+.rv-wrap{padding:0 16px;}
+.rv-head{font-size:15px;font-weight:600;color:var(--muted);margin-bottom:11px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;}
+.rv-head:hover{color:var(--text);}
+.rv-card{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:13px;margin-bottom:9px;animation:fi .35s ease both;}
+.rv-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;}
+.rv-author{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;color:var(--white);}
+.rv-text{font-size:14px;color:var(--text);margin-bottom:9px;}
+.rv-bot{display:flex;align-items:center;justify-content:space-between;}
+.rv-time{font-size:12px;color:var(--dim);}
+
+/* REVIEWS PAGE */
+#reviews-page{flex-direction:column;}
+.reviews-full-body{width:100%;max-width:480px;margin:0 auto;padding:20px 0 48px;}
+.back-bar{display:flex;align-items:center;gap:12px;padding:0 16px 16px;}
+.back-btn{background:none;border:1px solid var(--border2);border-radius:8px;color:var(--muted);padding:7px 12px;cursor:pointer;font-family:'Inter',sans-serif;font-size:13px;display:flex;align-items:center;gap:6px;transition:all .2s;}
+.back-btn:hover{border-color:var(--green);color:var(--green);}
+.page-title{font-size:16px;font-weight:700;color:var(--white);}
+
+/* ADMIN */
+#admin-page{flex-direction:column;}
+.admin-body{width:100%;max-width:600px;margin:0 auto;padding:0 0 48px;}
+.admin-topbar{display:flex;align-items:center;justify-content:space-between;padding:16px;border-bottom:1px solid var(--border);margin-bottom:14px;}
+.admin-brand{display:flex;align-items:center;gap:9px;font-size:17px;font-weight:800;color:var(--white);}
+.admin-badge-top{background:var(--blue-bg);border:1px solid var(--blue-br);border-radius:5px;padding:2px 8px;font-size:11px;font-weight:700;color:var(--blue);}
+.admin-stats{display:grid;grid-template-columns:repeat(5,1fr);gap:9px;padding:0 16px;margin-bottom:14px;}
+.ast{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:13px 9px;text-align:center;}
+.ast-val{font-size:22px;font-weight:800;line-height:1;margin-bottom:3px;}
+.ast-lbl{font-size:10px;color:var(--muted);}
+.ast-val.c-total{color:var(--white);}
+.ast-val.c-safe{color:var(--green);}
+.ast-val.c-spam{color:var(--red);}
+.ast-val.c-pct{color:var(--blue);}
+.ast-val.c-yellow{color:var(--yellow);}
+
+/* ANALYTICS CHART AREA */
+.analytics-section{padding:0 16px;margin-bottom:14px;}
+.analytics-title{font-size:13px;font-weight:700;color:var(--muted);margin-bottom:10px;letter-spacing:.3px;}
+.chart-wrap{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;}
+.bar-chart{display:flex;align-items:flex-end;gap:6px;height:100px;}
+.bar-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;}
+.bar-stack{width:100%;display:flex;flex-direction:column;justify-content:flex-end;}
+.bar-seg{border-radius:3px 3px 0 0;transition:height .5s ease;min-height:2px;}
+.bar-lbl{font-size:9px;color:var(--dim);text-align:center;white-space:nowrap;}
+.chart-legend{display:flex;gap:12px;margin-top:10px;flex-wrap:wrap;}
+.leg-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);}
+.leg-dot{width:8px;height:8px;border-radius:50%;}
+.score-dist{display:flex;align-items:flex-end;gap:6px;height:60px;margin-top:12px;}
+.sd-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;}
+.sd-bar{width:100%;background:var(--green);border-radius:3px 3px 0 0;transition:height .5s;}
+.sd-lbl{font-size:8.5px;color:var(--dim);text-align:center;}
+
+.filter-bar{display:flex;align-items:center;gap:7px;padding:0 16px;margin-bottom:12px;flex-wrap:wrap;}
+.fbtn{background:var(--card);border:1px solid var(--border2);border-radius:8px;color:var(--muted);font-family:'Inter',sans-serif;font-size:12px;font-weight:500;padding:5px 12px;cursor:pointer;transition:all .2s;}
+.fbtn:hover{border-color:var(--muted);color:var(--text);}
+.fbtn.active{background:var(--blue-bg);border-color:var(--blue-br);color:var(--blue);}
+.fbtn.active-green{background:var(--green-bg);border-color:var(--green-br);color:var(--green);}
+.fbtn.active-red{background:var(--red-bg);border-color:var(--red-br);color:var(--red);}
+.bulk-bar{display:flex;align-items:center;gap:7px;padding:0 16px;margin-bottom:12px;flex-wrap:wrap;}
+.bulk-btn{display:flex;align-items:center;gap:5px;background:none;border:1px solid var(--border2);border-radius:8px;color:var(--muted);font-family:'Inter',sans-serif;font-size:12px;font-weight:500;padding:6px 12px;cursor:pointer;transition:all .2s;}
+.bulk-btn:hover{border-color:var(--green);color:var(--green);}
+.bulk-btn.danger:hover{border-color:var(--red);color:var(--red);}
+.bulk-label{font-size:12px;color:var(--dim);}
+.arv-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:13px;margin:0 16px 9px;animation:fi .35s ease both;}
+.arv-card.is-spam{background:rgba(239,68,68,.07);border-color:rgba(239,68,68,.28);}
+.arv-card.is-approved{background:rgba(34,197,94,.04);border-color:rgba(34,197,94,.2);}
+.arv-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;}
+.arv-left{display:flex;align-items:center;gap:7px;}
+.arv-author{font-size:14px;font-weight:600;color:var(--white);}
+.arv-text{font-size:14px;color:var(--text);margin-bottom:9px;line-height:1.5;}
+.score-row{display:flex;align-items:center;gap:9px;margin-bottom:9px;}
+.score-bar-wrap{flex:1;background:var(--card2);border-radius:100px;height:6px;overflow:hidden;}
+.score-bar-fill{height:100%;border-radius:100px;transition:width .5s ease;}
+.score-num{font-size:13px;font-weight:700;min-width:34px;text-align:right;}
+.arv-flags{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:9px;}
+.ftag{display:inline-flex;align-items:center;gap:5px;background:rgba(239,68,68,.09);border:1px solid rgba(239,68,68,.2);border-radius:6px;padding:3px 8px;font-size:11px;color:#fca5a5;}
+.arv-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap;}
+.act-btn{display:flex;align-items:center;gap:5px;background:none;border:1px solid var(--border2);border-radius:7px;color:var(--muted);font-family:'Inter',sans-serif;font-size:12px;font-weight:500;padding:5px 10px;cursor:pointer;transition:all .2s;}
+.act-btn:hover{transform:translateY(-1px);}
+.act-approve{border-color:rgba(34,197,94,.3);color:var(--green);}
+.act-approve:hover{background:var(--green-bg);border-color:var(--green);}
+.act-spam{border-color:rgba(239,68,68,.3);color:var(--red);}
+.act-spam:hover{background:var(--red-bg);border-color:var(--red);}
+.act-delete{border-color:rgba(239,68,68,.2);color:#f87171;}
+.act-delete:hover{background:rgba(239,68,68,.12);border-color:var(--red);}
+.act-restore{border-color:rgba(59,130,246,.3);color:var(--blue);}
+.act-restore:hover{background:var(--blue-bg);border-color:var(--blue);}
+.arv-time{font-size:11px;color:var(--dim);margin-left:auto;}
+.arv-status{font-size:11px;font-weight:600;padding:2px 7px;border-radius:5px;}
+.st-spam{background:rgba(239,68,68,.18);color:var(--red);}
+.st-approved{background:rgba(34,197,94,.15);color:var(--green);}
+.st-pending{background:rgba(255,255,255,.06);color:var(--muted);}
+.empty-state{text-align:center;padding:36px 20px;color:var(--dim);font-size:14px;}
+.ml-badge{display:inline-flex;align-items:center;gap:4px;background:var(--purple-bg);border:1px solid var(--purple-br);border-radius:5px;padding:2px 7px;font-size:10px;font-weight:600;color:var(--purple);margin-left:6px;}
+
+/* API STATUS */
+.api-status{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);padding:0 16px;margin-bottom:8px;}
+.api-dot{width:7px;height:7px;border-radius:50%;background:var(--dim);}
+.api-dot.ok{background:var(--green);}
+.api-dot.err{background:var(--red);}
+
+/* TOAST */
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(70px);background:var(--card2);border:1px solid var(--border2);border-radius:10px;padding:10px 20px;font-size:13px;font-weight:500;box-shadow:0 8px 30px rgba(0,0,0,.4);transition:transform .3s cubic-bezier(.16,1,.3,1);z-index:999;max-width:92vw;text-align:center;}
+.toast.show{transform:translateX(-50%) translateY(0);}
+.toast.tok{border-color:var(--green);color:var(--green);}
+.toast.terr{border-color:var(--red);color:var(--red);}
+.toast.tblue{border-color:var(--blue);color:var(--blue);}
+.toast.tpurple{border-color:var(--purple);color:var(--purple);}
+.loader{display:inline-block;width:12px;height:12px;border:2px solid rgba(0,0,0,0.3);border-top-color:#000;border-radius:50%;animation:spin 0.7s linear infinite;}
+@media(max-width:500px){.admin-stats{grid-template-columns:repeat(3,1fr);}
+.otp-box{width:42px;height:49px;font-size:19px;}.otp-inputs{gap:6px;}}
+</style>
+</head>
+<body>
+
+<!-- ═══ CONFIG API URL ═══ -->
+<script>
+const API = 'http://127.0.0.1:8000'; // Backend running on port 8000
+</script>
+
+<!-- ═══ SETUP PAGE ═══ -->
+<div class="page active" id="setup-page">
+<div class="setup-wrap">
+  <div class="setup-hdr">
+    <div class="setup-ico"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#a855f7" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg></div>
+    <div class="setup-h">ReviewGuard Setup</div>
+    <div class="setup-s">Configure EmailJS for real OTP verification, then connect to the Python ML backend.</div>
+  </div>
+
+  <div class="sc">
+    <div class="sc-head"><div class="sc-num">1</div><div class="sc-title">Start the Python ML Backend</div></div>
+    <div class="sc-body">
+      In a terminal, navigate to the <strong>backend/</strong> folder and run:<br><br>
+      <div class="code-box">pip install -r requirements.txt
+python train_model.py
+uvicorn app:app --reload --port 8000</div>
+      The API will be live at <strong>http://localhost:8000</strong><br>
+      Swagger docs: <strong>http://localhost:8000/docs</strong>
+    </div>
+  </div>
+
+  <div class="sc">
+    <div class="sc-head"><div class="sc-num">2</div><div class="sc-title">Create free EmailJS account for OTP emails</div></div>
+    <div class="sc-body">Sign up at emailjs.com (free, 200 emails/month). Add Gmail service, create a template with <strong>{{otp_code}}</strong> variable, and copy your 3 keys below.
+    <a class="ext-link" href="https://www.emailjs.com" target="_blank"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg> Open emailjs.com</a>
+    <div class="code-box">Template body must include: {{otp_code}}, {{to_email}}, {{to_name}}</div>
+    </div>
+  </div>
+
+  <div class="cfg-section">
+    <div class="cfg-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg> EmailJS Keys</div>
+    <div class="cfg-sub">Required for sending real OTP codes to users' inboxes.</div>
+    <div class="cfg-f"><label>Service ID</label><input type="text" id="cfg-svc" placeholder="service_xxxxxxx" oninput="cfgCheck()"></div>
+    <div class="cfg-f"><label>Template ID</label><input type="text" id="cfg-tpl" placeholder="template_xxxxxxx" oninput="cfgCheck()"></div>
+    <div class="cfg-f"><label>Public Key</label><input type="text" id="cfg-pk" placeholder="aBcDeFgHiJkLmNoP" oninput="cfgCheck()"></div>
+    <div class="cfg-result" id="cfg-result"></div>
+    <button class="save-btn" id="save-btn" onclick="saveConfig()" disabled>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Save & Launch ReviewGuard
+    </button>
+    <button class="skip-btn" onclick="skipSetup()">Skip — use demo mode (OTP shown as popup)</button>
+  </div>
+</div>
+</div>
+
+<!-- ═══ SIGN UP ═══ -->
+<div class="page auth-shell" id="signup-page">
+  <div class="auth-card">
+    <div class="auth-ico"><svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div>
+    <h1 class="auth-title">Join ReviewGuard</h1>
+    <p class="auth-sub">Create your account to post reviews</p>
+    <div class="fg">
+      <label class="fl">Username</label>
+      <div class="fw"><span class="fi"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></span>
+      <input class="finput" type="text" id="su-name" placeholder="Enter your name"></div>
+      <div class="ferr" id="e-su-name">Please enter your username</div>
+    </div>
+    <div class="fg">
+      <label class="fl">Email</label>
+      <div class="fw"><span class="fi"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 7 10-7"/></svg></span>
+      <input class="finput" type="email" id="su-email" placeholder="you@example.com"></div>
+      <div class="ferr" id="e-su-email">Please enter a valid email</div>
+    </div>
+    <div class="fg">
+      <label class="fl">Password</label>
+      <div class="fw"><span class="fi"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+      <input class="finput" type="password" id="su-pass" placeholder="••••••••">
+      <button class="eyebtn" onclick="toggleEye('su-pass',this)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+      <div class="ferr" id="e-su-pass">Password must be at least 6 characters</div>
+    </div>
+    <button class="btnp" id="su-btn" onclick="doSignup()">Create Account <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg></button>
+    <div class="auth-sw">Already have an account? <a onclick="go('login-page')">Sign In</a></div>
+  </div>
+</div>
+
+<!-- ═══ LOGIN ═══ -->
+<div class="page auth-shell" id="login-page">
+  <div class="auth-card">
+    <div class="login-tabs">
+      <button class="ltab active" id="tab-user" onclick="switchTab('user')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg> User Login</button>
+      <button class="ltab admin-tab" id="tab-admin" onclick="switchTab('admin')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> Admin Login</button>
+    </div>
+    <div id="user-login-form">
+      <div class="auth-ico" style="margin-bottom:14px;"><svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div>
+      <h1 class="auth-title">Welcome Back</h1><p class="auth-sub">Sign in to continue</p>
+      <div class="errbox" id="li-err"></div>
+      <div class="fg"><label class="fl">Email</label><div class="fw"><span class="fi"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 7 10-7"/></svg></span><input class="finput" type="email" id="li-email" placeholder="you@example.com"></div></div>
+      <div class="fg"><label class="fl">Password</label><div class="fw"><span class="fi"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span><input class="finput" type="password" id="li-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"><button class="eyebtn" onclick="toggleEye('li-pass',this)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
+      <button class="btnp" id="li-btn" onclick="doLogin()">Sign In <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg></button>
+      <div class="auth-sw">Don't have an account? <a onclick="go('signup-page')">Sign Up</a></div>
+    </div>
+    <div id="admin-login-form" style="display:none;">
+      <div class="auth-ico admin-ico" style="margin-bottom:14px;"><svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+      <h1 class="auth-title">Admin Access</h1><p class="auth-sub">Manage and moderate reviews</p>
+      <div class="admin-hint"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> Use: <strong>admin@reviewguard.com</strong> / <strong>admin123</strong></div>
+      <div class="errbox" id="adm-err"></div>
+      <div class="fg"><label class="fl">Admin Email</label><div class="fw"><span class="fi"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 7 10-7"/></svg></span><input class="finput admin-input" type="email" id="adm-email" placeholder="admin@reviewguard.com"></div></div>
+      <div class="fg"><label class="fl">Admin Password</label><div class="fw"><span class="fi"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span><input class="finput admin-input" type="password" id="adm-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doAdminLogin()"><button class="eyebtn" onclick="toggleEye('adm-pass',this)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
+      <button class="btnp admin-btn" id="adm-btn" onclick="doAdminLogin()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> Access Admin Panel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ OTP ═══ -->
+<div class="page" id="verify-wait-page">
+  <div class="vw-card">
+    <div class="mail-ico"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="1.8"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 7 10-7"/></svg></div>
+    <div class="vw-title">Check your inbox!</div>
+    <div class="vw-sub">We sent a 6-digit code to:</div>
+    <div class="vw-email" id="vw-email-display">you@gmail.com</div>
+    <div class="vw-steps">
+      <div class="vw-step"><div class="vw-step-n">1</div><div class="vw-step-t">Open <strong>Gmail</strong> on your phone or computer</div></div>
+      <div class="vw-step"><div class="vw-step-n">2</div><div class="vw-step-t">Find email from <strong>ReviewGuard</strong> — also check <strong>Spam / Promotions</strong></div></div>
+      <div class="vw-step"><div class="vw-step-n">3</div><div class="vw-step-t">Enter the <strong>6-digit code</strong> below</div></div>
+    </div>
+    <div class="otp-lbl">ENTER VERIFICATION CODE</div>
+    <div class="otp-inputs">
+      <input class="otp-box" type="text" inputmode="numeric" maxlength="1" id="otp0" oninput="otpIn(0)" onkeydown="otpKey(event,0)" onpaste="otpPaste(event)">
+      <input class="otp-box" type="text" inputmode="numeric" maxlength="1" id="otp1" oninput="otpIn(1)" onkeydown="otpKey(event,1)">
+      <input class="otp-box" type="text" inputmode="numeric" maxlength="1" id="otp2" oninput="otpIn(2)" onkeydown="otpKey(event,2)">
+      <input class="otp-box" type="text" inputmode="numeric" maxlength="1" id="otp3" oninput="otpIn(3)" onkeydown="otpKey(event,3)">
+      <input class="otp-box" type="text" inputmode="numeric" maxlength="1" id="otp4" oninput="otpIn(4)" onkeydown="otpKey(event,4)">
+      <input class="otp-box" type="text" inputmode="numeric" maxlength="1" id="otp5" oninput="otpIn(5)" onkeydown="otpKey(event,5)">
+    </div>
+    <div class="otp-err" id="otp-err">❌ Wrong code. Please try again.</div>
+    <button class="verify-btn" onclick="verifyOTP()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Verify & Continue</button>
+    <div class="resend-row">Didn't get it? <button class="resend-link" id="resend-btn" onclick="resendOTP()">Resend code</button><span id="resend-timer" style="font-size:13px;color:var(--dim);"></span></div>
+    <button class="back-su" onclick="go('signup-page')">← Back to Sign Up</button>
+  </div>
+</div>
+
+<!-- ═══ DASHBOARD ═══ -->
+<div class="page" id="dash-page">
+  <div class="dash-body">
+    <div class="topbar">
+      <div class="brand">ReviewGuard</div>
+      <div class="topright">
+        <div class="welcome">Welcome, <b id="d-uname">@user</b></div>
+        <button class="logoutbtn" onclick="doLogout()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Logout</button>
+      </div>
+    </div>
+    <div class="api-status" id="api-status"><div class="api-dot" id="api-dot"></div><span id="api-status-text">Connecting to ML backend…</span></div>
+    <div class="prod-card">
+      <div class="prod-thumb">📱</div>
+      <div><div class="prod-name">TechPro X1 Smartphone</div><div class="prod-desc">Latest flagship with AI camera &amp; all-day battery</div>
+      <div class="prod-stars"><span class="sf">★</span><span class="sf">★</span><span class="sf">★</span><span class="sf">★</span><span class="se">★</span><span class="rcount" id="d-rcount">0 reviews</span></div></div>
+    </div>
+    <div class="inp-card">
+      <div class="post-as">Posting as <b id="d-poster">@user</b></div>
+      <textarea class="rv-ta" id="rv-ta" placeholder="Write your review… (min 10 words for best authenticity score)" oninput="updateCC()"></textarea>
+      <div class="inp-foot"><span class="cc"><span id="rv-cc">0</span>/500</span>
+      <button class="subbtn" id="sub-btn" onclick="submitReview()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Submit Review</button></div>
+    </div>
+    <div class="rv-wrap">
+      <div class="rv-head" id="d-rv-head" onclick="openReviewsPage()">Approved Reviews (0) <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>
+      <div id="rv-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ REVIEWS PAGE ═══ -->
+<div class="page" id="reviews-page">
+  <div class="reviews-full-body">
+    <div class="back-bar">
+      <button class="back-btn" onclick="go('dash-page')"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 5l-7 7 7 7"/></svg> Back</button>
+      <div class="page-title" id="full-rv-title">Reviews</div>
+    </div>
+    <div style="padding:0 16px;" id="full-rv-list"></div>
+  </div>
+</div>
+
+<!-- ═══ ADMIN ═══ -->
+<div class="page" id="admin-page">
+  <div class="admin-body">
+    <div class="admin-topbar">
+      <div class="admin-brand"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> ReviewGuard <span class="admin-badge-top">ADMIN</span></div>
+      <div style="display:flex;align-items:center;gap:9px;"><div class="welcome">Welcome, <b class="admin-name">Admin</b></div><button class="logoutbtn" onclick="doLogout()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Logout</button></div>
+    </div>
+    <div class="admin-stats" id="admin-stats-row">
+      <div class="ast"><div class="ast-val c-total" id="a-total">—</div><div class="ast-lbl">Total</div></div>
+      <div class="ast"><div class="ast-val c-safe" id="a-safe">—</div><div class="ast-lbl">✅ Approved</div></div>
+      <div class="ast"><div class="ast-val c-spam" id="a-spam">—</div><div class="ast-lbl">⚠️ Spam</div></div>
+      <div class="ast"><div class="ast-val c-yellow" id="a-pending">—</div><div class="ast-lbl">🕐 Pending</div></div>
+      <div class="ast"><div class="ast-val c-pct" id="a-pct">—</div><div class="ast-lbl">Avg Score</div></div>
+    </div>
+
+    <!-- Analytics Charts -->
+    <div class="analytics-section">
+      <div class="analytics-title">📊 DETECTION TREND (LAST 7 DAYS)</div>
+      <div class="chart-wrap">
+        <div class="bar-chart" id="trend-chart"></div>
+        <div class="chart-legend">
+          <div class="leg-item"><div class="leg-dot" style="background:var(--green)"></div>Approved</div>
+          <div class="leg-item"><div class="leg-dot" style="background:var(--red)"></div>Spam</div>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:12px;margin-bottom:4px;font-weight:600;letter-spacing:.3px;">SCORE DISTRIBUTION</div>
+        <div class="score-dist" id="score-dist"></div>
+      </div>
+    </div>
+
+    <div class="filter-bar">
+      <span style="font-size:12px;color:var(--muted);font-weight:500;">Filter:</span>
+      <button class="fbtn active" id="f-all" onclick="setFilter('all')">All</button>
+      <button class="fbtn" id="f-spam" onclick="setFilter('spam')">⚠️ Spam</button>
+      <button class="fbtn" id="f-approved" onclick="setFilter('approved')">✅ Approved</button>
+      <button class="fbtn" id="f-pending" onclick="setFilter('pending')">🕐 Pending</button>
+    </div>
+    <div class="bulk-bar">
+      <span class="bulk-label">Bulk:</span>
+      <button class="bulk-btn" onclick="bulkApproveAll()"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Approve All Pending</button>
+      <button class="bulk-btn danger" onclick="bulkDeleteSpam()"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg> Delete All Spam</button>
+    </div>
+    <div id="admin-rv-list"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ══ STATE ══ */
+let authToken = null;
+let currentUser = null;
+let demoMode = false;
+let EJS_SVC = '', EJS_TPL = '', EJS_PK = '';
+let pendingUser = null, currentOTP = '', resendTick = null;
+let adminFilter = 'all';
+let reviewsCache = [];
+
+/* ══ HELPERS ══ */
+function v(id){return document.getElementById(id).value.trim();}
+function go(id){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById(id).classList.add('active');window.scrollTo(0,0);}
+function showToast(msg,type='tok'){const t=document.getElementById('toast');t.textContent=msg;t.className=`toast ${type} show`;setTimeout(()=>t.classList.remove('show'),3200);}
+function toggleEye(id,btn){const i=document.getElementById(id);const s=i.type==='password';i.type=s?'text':'password';btn.innerHTML=s?`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`:`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;}
+function switchTab(t){document.getElementById('tab-user').classList.toggle('active',t==='user');document.getElementById('tab-admin').classList.toggle('active',t==='admin');document.getElementById('user-login-form').style.display=t==='user'?'block':'none';document.getElementById('admin-login-form').style.display=t==='admin'?'block':'none';}
+function spinBtn(id, label){document.getElementById(id).disabled=true;document.getElementById(id).innerHTML=`<span class="loader"></span> ${label}`;}
+function restoreBtn(id, html){document.getElementById(id).disabled=false;document.getElementById(id).innerHTML=html;}
+
+/* ══ API CLIENT ══ */
+async function api(method, path, body, token) {
+  const opts = {
+    method,
+    headers: {'Content-Type':'application/json'},
+  };
+  if (body) opts.body = JSON.stringify(body);
+  const url = body && body.token ? `${API}${path}` : (token ? `${API}${path}?token=${token}` : `${API}${path}`);
+  const resp = await fetch(url, opts);
+  const data = await resp.json();
+  if (!resp.ok) throw new Error(data.detail || 'Request failed');
+  return data;
+}
+
+/* ══ API HEALTH CHECK ══ */
+async function checkApiStatus() {
+  try {
+    const data = await fetch(`${API}/api/health`).then(r=>r.json());
+    document.getElementById('api-dot').className = 'api-dot ok';
+    document.getElementById('api-status-text').textContent = `ML Backend connected ${data.ml_loaded ? '(model loaded ✓)' : '(no model — run train_model.py)'}`;
+  } catch(e) {
+    document.getElementById('api-dot').className = 'api-dot err';
+    document.getElementById('api-status-text').textContent = 'Backend offline — start: uvicorn app:app --reload --port 8000';
+  }
+}
+
+/* ══ SETUP ══ */
+function cfgCheck(){
+  const s=v('cfg-svc'),t=v('cfg-tpl'),p=v('cfg-pk');
+  const ok=s.length>4&&t.length>4&&p.length>4;
+  document.getElementById('save-btn').disabled=!ok;
+  document.getElementById('cfg-svc').classList.toggle('valid',s.length>4);
+  document.getElementById('cfg-tpl').classList.toggle('valid',t.length>4);
+  document.getElementById('cfg-pk').classList.toggle('valid',p.length>4);
+}
+
+async function saveConfig(){
+  const s=v('cfg-svc'),t=v('cfg-tpl'),p=v('cfg-pk');
+  const btn=document.getElementById('save-btn'),res=document.getElementById('cfg-result');
+  btn.disabled=true;btn.innerHTML=`<span class="loader"></span> Saving…`;res.className='cfg-result';
+  try{
+    emailjs.init({publicKey:p});
+    EJS_SVC=s;EJS_TPL=t;EJS_PK=p;demoMode=false;
+    res.className='cfg-result ok show';res.innerHTML=`<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg><span>EmailJS configured! Launching…</span>`;
+    btn.innerHTML=`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Saved!`;
+    setTimeout(()=>go('signup-page'),1000);
+  }catch(e){
+    res.className='cfg-result fail show';res.innerHTML=`❌ ${e.message||'Check your keys'}`;
+    btn.disabled=false;btn.innerHTML=`Save & Launch ReviewGuard`;
+  }
+}
+
+function skipSetup(){demoMode=true;showToast('Demo mode — OTP shown as popup','tpurple');setTimeout(()=>go('signup-page'),600);}
+
+/* ══ OTP ══ */
+function genOTP(){return String(Math.floor(100000+Math.random()*900000));}
+async function sendOTP(email,name,otp){
+  if(demoMode){setTimeout(()=>alert(`[DEMO MODE]\n\nOTP Code: ${otp}\n\nIn real mode this would go to: ${email}`),300);return;}
+  return emailjs.send(EJS_SVC,EJS_TPL,{to_email:email,to_name:name,otp_code:otp});
+}
+function otpIn(i){const b=document.getElementById('otp'+i);b.value=b.value.replace(/\D/g,'').slice(0,1);b.classList.toggle('filled',b.value.length===1);document.getElementById('otp-err').classList.remove('show');if(b.value&&i<5)document.getElementById('otp'+(i+1)).focus();if(getOTP().length===6)setTimeout(verifyOTP,180);}
+function otpKey(e,i){if(e.key==='Backspace'){const b=document.getElementById('otp'+i);if(!b.value&&i>0){const p=document.getElementById('otp'+(i-1));p.value='';p.classList.remove('filled');p.focus();}}if(e.key==='ArrowLeft'&&i>0)document.getElementById('otp'+(i-1)).focus();if(e.key==='ArrowRight'&&i<5)document.getElementById('otp'+(i+1)).focus();}
+function otpPaste(e){e.preventDefault();const paste=(e.clipboardData||window.clipboardData).getData('text').replace(/\D/g,'').slice(0,6);for(let i=0;i<paste.length;i++){const b=document.getElementById('otp'+i);if(b){b.value=paste[i];b.classList.add('filled');}}if(paste.length===6)setTimeout(verifyOTP,180);else document.getElementById('otp'+Math.min(paste.length,5)).focus();}
+function getOTP(){return[0,1,2,3,4,5].map(i=>document.getElementById('otp'+i).value).join('');}
+function clearOTP(){for(let i=0;i<6;i++){const b=document.getElementById('otp'+i);b.value='';b.classList.remove('filled','shake');b.style.borderColor='';b.style.background='';}}
+function shakeOTP(){for(let i=0;i<6;i++){const b=document.getElementById('otp'+i);b.classList.remove('shake');void b.offsetWidth;b.classList.add('shake');b.style.borderColor='var(--red)';b.style.background='var(--red-bg)';}setTimeout(()=>{clearOTP();document.getElementById('otp0').focus();},650);}
+function startTimer(sec){clearTimer();const btn=document.getElementById('resend-btn'),lbl=document.getElementById('resend-timer');btn.disabled=true;let n=sec;lbl.textContent=`(${n}s)`;resendTick=setInterval(()=>{n--;if(n<=0){clearTimer();lbl.textContent='';btn.disabled=false;}else lbl.textContent=`(${n}s)`;},1000);}
+function clearTimer(){if(resendTick){clearInterval(resendTick);resendTick=null;}}
+
+/* ══ SIGN UP ══ */
+async function doSignup(){
+  const name=v('su-name'),email=v('su-email'),pass=document.getElementById('su-pass').value;
+  ['e-su-name','e-su-email','e-su-pass'].forEach(id=>document.getElementById(id).classList.remove('show'));
+  let ok=true;
+  if(!name){document.getElementById('e-su-name').classList.add('show');ok=false;}
+  if(!email||!email.includes('@')){document.getElementById('e-su-email').classList.add('show');ok=false;}
+  if(pass.length<6){document.getElementById('e-su-pass').classList.add('show');ok=false;}
+  if(!ok)return;
+  spinBtn('su-btn','Sending code…');
+  currentOTP=genOTP();pendingUser={name,email,pass};
+  try{
+    await sendOTP(email,name,currentOTP);
+    document.getElementById('vw-email-display').textContent=email;
+    clearOTP();document.getElementById('otp-err').classList.remove('show');
+    startTimer(60);go('verify-wait-page');
+    setTimeout(()=>document.getElementById('otp0').focus(),300);
+    if(!demoMode)showToast('📧 Code sent! Check your inbox','tok');
+  }catch(err){
+    showToast('❌ Email failed: '+(err.text||err.message||'Check EmailJS keys'),'terr');
+  }
+  restoreBtn('su-btn',`Create Account <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>`);
+}
+
+async function verifyOTP(){
+  const entered=getOTP();
+  if(entered.length<6){showToast('Enter all 6 digits','terr');return;}
+  if(entered!==currentOTP){
+    document.getElementById('otp-err').classList.add('show');shakeOTP();return;
+  }
+  // OTP correct — register user with backend
+  try{
+    const data=await api('POST','/api/auth/register',{name:pendingUser.name,email:pendingUser.email,password:pendingUser.pass});
+    authToken=data.token;
+    currentUser={name:data.name,email:data.email,isAdmin:false,id:data.user_id};
+    pendingUser=null;currentOTP='';clearTimer();
+    showToast('✅ Email verified! Welcome!','tok');
+    await initDash();go('dash-page');
+  }catch(err){
+    showToast('❌ Registration failed: '+err.message,'terr');
+  }
+}
+
+async function resendOTP(){
+  if(!pendingUser)return;
+  document.getElementById('resend-btn').disabled=true;
+  currentOTP=genOTP();
+  try{await sendOTP(pendingUser.email,pendingUser.name,currentOTP);showToast('📧 New code sent!','tok');clearOTP();document.getElementById('otp-err').classList.remove('show');startTimer(60);document.getElementById('otp0').focus();}
+  catch(err){showToast('❌ Resend failed','terr');document.getElementById('resend-btn').disabled=false;}
+}
+
+/* ══ LOGIN ══ */
+async function doLogin(){
+  const email=v('li-email'),pass=document.getElementById('li-pass').value;
+  const err=document.getElementById('li-err');err.classList.remove('show');
+  if(!email||!pass){err.textContent='⚠ Please fill in all fields.';err.classList.add('show');return;}
+  spinBtn('li-btn','Signing in…');
+  try{
+    const data=await api('POST','/api/auth/login',{email,password:pass});
+    authToken=data.token;currentUser={name:data.name,email:data.email,isAdmin:false,id:data.user_id};
+    showToast('✅ Signed in!');await initDash();go('dash-page');
+  }catch(e){
+    err.textContent='❌ '+e.message;err.classList.add('show');
+  }
+  restoreBtn('li-btn',`Sign In <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>`);
+}
+
+async function doAdminLogin(){
+  const email=v('adm-email'),pass=document.getElementById('adm-pass').value;
+  const err=document.getElementById('adm-err');err.classList.remove('show');
+  if(!email||!pass){err.textContent='⚠ Fill in all fields.';err.classList.add('show');return;}
+  spinBtn('adm-btn','Authenticating…');
+  try{
+    const data=await api('POST','/api/auth/login',{email,password:pass});
+    authToken=data.token;currentUser={name:data.name,email,isAdmin:true,id:'admin'};
+    showToast('🛡️ Admin access granted!','tblue');await initAdmin();go('admin-page');
+  }catch(e){
+    err.textContent='❌ '+e.message;err.classList.add('show');
+  }
+  restoreBtn('adm-btn',`<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> Access Admin Panel`);
+}
+
+async function doLogout(){
+  try{await api('POST','/api/auth/logout',{token:authToken});}catch(e){}
+  authToken=null;currentUser=null;reviewsCache=[];
+  showToast('Logged out.','terr');setTimeout(()=>go('login-page'),600);
+}
+
+/* ══ DASHBOARD ══ */
+async function initDash(){
+  document.getElementById('d-uname').textContent='@'+currentUser.name;
+  document.getElementById('d-poster').textContent='@'+currentUser.name;
+  await loadPublicReviews();
+  checkApiStatus();
+}
+
+async function loadPublicReviews(){
+  try{
+    const data=await api('GET','/api/reviews');
+    reviewsCache=data.reviews||[];
+    renderDash();
+    const n=reviewsCache.length;
+    document.getElementById('d-rcount').textContent=n+' reviews';
+    document.getElementById('d-rv-head').innerHTML=`Approved Reviews (${n}) <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>`;
+    document.getElementById('full-rv-title').textContent=`Approved Reviews (${n})`;
+  }catch(e){
+    document.getElementById('rv-list').innerHTML='<div class="empty-state">⚠️ Could not load reviews — is the backend running?</div>';
+  }
+}
+
+function buildUserCard(r,i){
+  const d=document.createElement('div');d.className='rv-card';d.style.animationDelay=(i*.06)+'s';
+  d.innerHTML=`<div class="rv-top"><div class="rv-author">@${r.author}</div></div><div class="rv-text">${r.text}</div><div class="rv-bot"><span class="rv-time">${r.time}</span></div>`;
+  return d;
+}
+function renderDash(){const l=document.getElementById('rv-list');l.innerHTML='';if(!reviewsCache.length){l.innerHTML='<div class="empty-state">No approved reviews yet.</div>';return;}reviewsCache.forEach((r,i)=>l.appendChild(buildUserCard(r,i)));}
+function renderFull(){const l=document.getElementById('full-rv-list');l.innerHTML='';reviewsCache.forEach((r,i)=>l.appendChild(buildUserCard(r,i)));}
+function openReviewsPage(){renderFull();go('reviews-page');}
+function updateCC(){document.getElementById('rv-cc').textContent=document.getElementById('rv-ta').value.length;}
+
+async function submitReview(){
+  const text=document.getElementById('rv-ta').value.trim();
+  if(!text){showToast('Write a review first','terr');return;}
+  if(text.length>500){showToast('Max 500 chars','terr');return;}
+  const btn=document.getElementById('sub-btn');
+  btn.disabled=true;btn.innerHTML=`<span class="loader"></span> Analyzing…`;
+  try{
+    const result=await api('POST','/api/reviews',{text,token:authToken});
+    document.getElementById('rv-ta').value='';document.getElementById('rv-cc').textContent='0';
+    if(result.is_spam){
+      showToast(`⚠️ Spam detected (score: ${result.score}%) — review not published`,'terr');
+    } else {
+      showToast(`✅ Review approved! (authenticity: ${result.score}%)`,'tok');
+    }
+    await loadPublicReviews();
+  }catch(e){
+    if(e.message.includes('401')||e.message.includes('token')){showToast('Session expired — please log in again','terr');go('login-page');}
+    else showToast('❌ '+e.message,'terr');
+  }
+  btn.disabled=false;btn.innerHTML=`<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Submit Review`;
+}
+
+/* ══ ADMIN ══ */
+async function initAdmin(){
+  adminFilter='all';setFilterUI('all');
+  await loadAdminStats();
+  await loadAdminReviews();
+}
+
+async function loadAdminStats(){
+  try{
+    const d=await api('GET',`/api/admin/stats?token=${authToken}`);
+    document.getElementById('a-total').textContent=d.total;
+    document.getElementById('a-safe').textContent=d.approved;
+    document.getElementById('a-spam').textContent=d.spam;
+    document.getElementById('a-pending').textContent=d.pending;
+    document.getElementById('a-pct').textContent=d.avg_score+'%';
+    renderTrendChart(d.trend||[]);
+    renderScoreDist(d.score_distribution||{});
+  }catch(e){console.error('Stats error:',e);}
+}
+
+async function loadAdminReviews(){
+  try{
+    const d=await api('GET',`/api/admin/reviews?token=${authToken}&filter=${adminFilter}`);
+    renderAdminList(d.reviews||[]);
+  }catch(e){document.getElementById('admin-rv-list').innerHTML='<div class="empty-state">⚠️ Could not load reviews</div>';}
+}
+
+/* ═ ANALYTICS CHARTS ═ */
+function renderTrendChart(trend){
+  const el=document.getElementById('trend-chart');el.innerHTML='';
+  if(!trend.length){el.innerHTML='<div style="font-size:12px;color:var(--dim);padding:20px;">No trend data yet</div>';return;}
+  const maxVal=Math.max(...trend.map(d=>d.total),1);
+  trend.forEach(day=>{
+    const col=document.createElement('div');col.className='bar-col';
+    const hA=Math.round((day.approved/maxVal)*90);
+    const hS=Math.round((day.spam/maxVal)*90);
+    col.innerHTML=`<div class="bar-stack" style="height:90px;justify-content:flex-end;display:flex;flex-direction:column;width:100%;">
+      <div class="bar-seg" style="height:${hS}px;background:var(--red);opacity:.8;"></div>
+      <div class="bar-seg" style="height:${hA}px;background:var(--green);opacity:.8;border-radius:3px 3px 0 0;margin-top:1px;"></div>
+    </div><div class="bar-lbl">${day.date.split(' ')[1]||day.date}</div>`;
+    el.appendChild(col);
+  });
+}
+
+function renderScoreDist(dist){
+  const el=document.getElementById('score-dist');el.innerHTML='';
+  const buckets=[['0-20','var(--red)'],['21-40','#f97316'],['41-60','var(--yellow)'],['61-80','#84cc16'],['81-100','var(--green)']];
+  const maxVal=Math.max(...Object.values(dist),1);
+  buckets.forEach(([key,color])=>{
+    const val=dist[key]||0;const h=Math.max(4,Math.round((val/maxVal)*50));
+    const col=document.createElement('div');col.className='sd-col';
+    col.innerHTML=`<div class="sd-bar" style="height:${h}px;background:${color};"></div><div class="sd-lbl">${key}</div>`;
+    el.appendChild(col);
+  });
+}
+
+async function setFilter(f){adminFilter=f;setFilterUI(f);await loadAdminReviews();}
+function setFilterUI(f){['all','spam','approved','pending'].forEach(k=>{const b=document.getElementById('f-'+k);b.className='fbtn';if(k===f){if(k==='spam')b.classList.add('active-red');else if(k==='approved')b.classList.add('active-green');else b.classList.add('active');}});}
+
+function warnI(){return`<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`;}
+
+function buildAdminCard(r,i){
+  const d=document.createElement('div');d.id='arv-'+r.id;
+  d.className='arv-card'+(r.status==='spam'?' is-spam':r.status==='approved'?' is-approved':'');d.style.animationDelay=(i*.05)+'s';
+  const sl={spam:'st-spam',approved:'st-approved',pending:'st-pending'},st={spam:'⚠ Spam',approved:'✅ Approved',pending:'🕐 Pending'};
+  const bc=r.score>=60?'var(--green)':r.score>=40?'var(--yellow)':'var(--red)';
+  const mlConf=r.ml_score!=null?`<span class="ml-badge">ML: ${Math.round(r.ml_score*100)}%</span>`:'';
+  const flags=(r.flags||[]).map(f=>`<span class="ftag">${warnI()} ${f}</span>`).join('');
+  let acts='';
+  if(r.status==='spam'||r.status==='pending')acts+=`<button class="act-btn act-approve" onclick="adminApprove(${r.id})"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Approve</button>`;
+  if(r.status==='approved'||r.status==='pending')acts+=`<button class="act-btn act-spam" onclick="adminMarkSpam(${r.id})"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg> Mark Spam</button>`;
+  if(r.status==='spam')acts+=`<button class="act-btn act-restore" onclick="adminApprove(${r.id})"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.9"/></svg> Restore</button>`;
+  acts+=`<button class="act-btn act-delete" onclick="adminDelete(${r.id})"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg> Delete</button>`;
+  d.innerHTML=`<div class="arv-top"><div class="arv-left"><div class="arv-author">@${r.author}</div><span class="arv-status ${sl[r.status]}">${st[r.status]}</span>${mlConf}</div><span class="arv-time">${r.time}</span></div><div class="arv-text">${r.text}</div><div class="score-row"><div class="score-bar-wrap"><div class="score-bar-fill" style="width:${r.score}%;background:${bc};"></div></div><span class="score-num" style="color:${bc}">${r.score}%</span></div>${flags?`<div class="arv-flags">${flags}</div>`:''}<div class="arv-actions">${acts}</div>`;
+  return d;
+}
+
+function renderAdminList(reviews){
+  const list=document.getElementById('admin-rv-list');list.innerHTML='';
+  if(!reviews.length){list.innerHTML=`<div class="empty-state">No reviews for this filter.</div>`;return;}
+  reviews.forEach((r,i)=>list.appendChild(buildAdminCard(r,i)));
+}
+
+async function adminApprove(id){
+  try{await api('POST',`/api/admin/reviews/${id}/approve`,{token:authToken});showToast('✅ Approved!','tok');await initAdmin();}
+  catch(e){showToast('❌ '+e.message,'terr');}
+}
+async function adminMarkSpam(id){
+  try{await api('POST',`/api/admin/reviews/${id}/spam`,{token:authToken});showToast('⚠️ Marked spam','terr');await initAdmin();}
+  catch(e){showToast('❌ '+e.message,'terr');}
+}
+async function adminDelete(id){
+  try{await fetch(`${API}/api/admin/reviews/${id}?token=${authToken}`,{method:'DELETE'});showToast('🗑️ Deleted','terr');await initAdmin();}
+  catch(e){showToast('❌ '+e.message,'terr');}
+}
+async function bulkApproveAll(){
+  try{const d=await api('POST','/api/admin/bulk/approve-pending',{token:authToken});showToast(`✅ ${d.count} approved!`,'tok');await initAdmin();}
+  catch(e){showToast('❌ '+e.message,'terr');}
+}
+async function bulkDeleteSpam(){
+  try{const d=await api('POST','/api/admin/bulk/delete-spam',{token:authToken});showToast(`🗑️ ${d.count} spam deleted`,'terr');await initAdmin();}
+  catch(e){showToast('❌ '+e.message,'terr');}
+}
+</script>
+</body>
+</html>

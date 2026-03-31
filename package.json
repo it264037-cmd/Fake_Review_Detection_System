@@ -1,0 +1,12 @@
+{
+  "name": "protothon-p3",
+  "version": "1.0.0",
+  "description": "## Project Structure ``` reviewguard/ ├── backend/ │   ├── app.py              ← FastAPI REST API │   ├── train_model.py      ← ML model trainer (run once) │   ├── requirements.txt    ← Python dependencies │   └── models/             ← Auto-created after training └── frontend/     └── index.html          ← Connected frontend ```",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
