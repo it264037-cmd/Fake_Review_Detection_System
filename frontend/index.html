@@ -443,7 +443,8 @@ uvicorn app:app --reload --port 8000</div>
       <button class="subbtn" id="sub-btn" onclick="submitReview()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Submit Review</button></div>
     </div>
     <div class="rv-wrap">
-      <div class="rv-head" id="d-rv-head" onclick="openReviewsPage()">Visible Reviews (Approved + Pending) (0) <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>
+      <div class="rv-head" id="d-rv-head" onclick="openReviewsPage()">Visible Reviews (Approved Only) (0) <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px;" id="public-visibility-note">Only approved reviews are visible right now. Pending reviews stay in the admin queue.</div>
       <div id="rv-list"></div>
     </div>
   </div>
@@ -492,7 +493,7 @@ uvicorn app:app --reload --port 8000</div>
     <div class="settings-panel">
       <div class="settings-card">
         <div class="settings-head">
-          <div class="settings-title">⚙️ ADMIN IP PROTECTION SETTINGS</div>
+          <div class="settings-title">⚙️ ADMIN MODERATION SETTINGS</div>
           <button class="bulk-btn" onclick="loadAdminSettings()">Refresh</button>
         </div>
         <div class="settings-grid">
@@ -506,13 +507,20 @@ uvicorn app:app --reload --port 8000</div>
           </div>
         </div>
         <div class="set-note" id="ip-limit-note">If one IP sends more than 5 reviews in 10 minutes, new reviews from that IP are blocked automatically.</div>
+        <div class="settings-grid" style="margin-top:10px;">
+          <label class="set-toggle" style="grid-column:1 / -1;">
+            <input type="checkbox" id="pending-visibility-enabled">
+            <span>Show pending reviews on the public user review page before approval</span>
+          </label>
+        </div>
+        <div class="set-note" id="pending-visibility-note">Pending reviews are currently hidden from normal users and only admins can see them.</div>
         <div class="set-num" style="margin-top:12px;">
           <label for="retrain-dataset-path">Training CSV paths (one per line)</label>
           <textarea id="retrain-dataset-path" style="width:100%;min-height:92px;background:var(--card);border:1.5px solid var(--border2);border-radius:8px;padding:10px 12px;color:var(--text);font-family:'Inter',sans-serif;font-size:13px;resize:vertical;outline:none;" placeholder="C:\Users\D.praveen\Downloads\reviews_10000 (2).csv&#10;C:\Users\D.praveen\Downloads\dataset_4.csv&#10;C:\Users\D.praveen\Downloads\dataset_3.csv&#10;C:\Users\D.praveen\Downloads\dataset_2.csv&#10;C:\Users\D.praveen\Downloads\dataset_1.csv"></textarea>
         </div>
         <div class="set-note" id="model-source-note">Current model: checking dataset info…</div>
         <div class="arv-actions" style="margin-top:12px;">
-          <button class="bulk-btn" onclick="saveAdminSettings()"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save IP Rule</button>
+          <button class="bulk-btn" onclick="saveAdminSettings()"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save Admin Rules</button>
           <button class="bulk-btn" id="retrain-btn" onclick="adminRetrainModel()"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10"/><path d="M3.51 15A9 9 0 0 0 18.36 18.36L23 14"/></svg> Retrain Model</button>
         </div>
         <div class="blocked-list" id="blocked-ip-list"></div>
@@ -546,7 +554,9 @@ let EJS_SVC = '', EJS_TPL = '', EJS_PK = '';
 let pendingUser = null, currentOTP = '', resendTick = null;
 let adminFilter = 'all';
 let reviewsCache = [];
-let adminSettings = {ip_review_limit_enabled:true,max_reviews_per_ip:5,blocked_ips:[]};
+let publicPendingVisible = false;
+let publicVisibilityLabel = 'Approved Only';
+let adminSettings = {ip_review_limit_enabled:true,max_reviews_per_ip:5,show_pending_reviews_publicly:false,blocked_ips:[]};
 
 /* ══ HELPERS ══ */
 function v(id){return document.getElementById(id).value.trim();}
@@ -734,11 +744,19 @@ async function loadPublicReviews(){
   try{
     const data=await api('GET','/api/reviews');
     reviewsCache=data.reviews||[];
+    publicPendingVisible=!!data.pending_visible;
+    publicVisibilityLabel=data.visibility_label||(publicPendingVisible?'Approved + Pending':'Approved Only');
     renderDash();
     const n=reviewsCache.length;
     document.getElementById('d-rcount').textContent=n+' reviews';
-    document.getElementById('d-rv-head').innerHTML=`Visible Reviews (Approved + Pending) (${n}) <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>`;
-    document.getElementById('full-rv-title').textContent=`Visible Reviews (${n})`;
+    document.getElementById('d-rv-head').innerHTML=`Visible Reviews (${n}) <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>`;
+    document.getElementById('full-rv-title').textContent='Visible Reviews';
+    const note=document.getElementById('public-visibility-note');
+    if(note){
+      note.textContent=publicPendingVisible
+        ? 'Latest reviews are currently visible to users.'
+        : 'Only approved reviews are visible right now. Pending reviews stay in the admin queue.';
+    }
   }catch(e){
     document.getElementById('rv-list').innerHTML='<div class="empty-state">⚠️ Could not load reviews — is the backend running?</div>';
   }
@@ -749,8 +767,8 @@ function buildUserCard(r,i){
   d.innerHTML=`<div class="rv-top"><div class="rv-author">@${r.author}</div></div><div class="rv-text">${r.text}</div><div class="rv-bot"><span class="rv-time">${r.time}</span></div>`;
   return d;
 }
-function renderDash(){const l=document.getElementById('rv-list');l.innerHTML='';if(!reviewsCache.length){l.innerHTML='<div class="empty-state">No visible reviews yet. Approved and pending reviews will appear here.</div>';return;}reviewsCache.forEach((r,i)=>l.appendChild(buildUserCard(r,i)));}
-function renderFull(){const l=document.getElementById('full-rv-list');l.innerHTML='';reviewsCache.forEach((r,i)=>l.appendChild(buildUserCard(r,i)));}
+function renderDash(){const l=document.getElementById('rv-list');l.innerHTML='';if(!reviewsCache.length){l.innerHTML=`<div class="empty-state">${publicPendingVisible?'No visible reviews yet. Approved and pending reviews will appear here.':'No approved reviews yet. Pending reviews stay in the admin queue until approval.'}</div>`;return;}reviewsCache.forEach((r,i)=>l.appendChild(buildUserCard(r,i)));}
+function renderFull(){const l=document.getElementById('full-rv-list');l.innerHTML='';if(!reviewsCache.length){l.innerHTML=`<div class="empty-state">${publicPendingVisible?'No visible reviews yet. Approved and pending reviews will appear here.':'No approved reviews are public right now.'}</div>`;return;}reviewsCache.forEach((r,i)=>l.appendChild(buildUserCard(r,i)));}
 function openReviewsPage(){renderFull();go('reviews-page');}
 function updateCC(){document.getElementById('rv-cc').textContent=document.getElementById('rv-ta').value.length;}
 
@@ -814,7 +832,11 @@ async function loadAdminSettings(){
     adminSettings=d;
     document.getElementById('ip-limit-enabled').checked=!!d.ip_review_limit_enabled;
     document.getElementById('ip-limit-count').value=d.max_reviews_per_ip??5;
+    document.getElementById('pending-visibility-enabled').checked=!!d.show_pending_reviews_publicly;
     document.getElementById('ip-limit-note').textContent=`If one IP sends more than ${d.max_reviews_per_ip} reviews in ${d.window_minutes||10} minutes, new reviews from that IP are blocked automatically.`;
+    document.getElementById('pending-visibility-note').textContent=d.show_pending_reviews_publicly
+      ? 'Pending reviews are currently visible on the public user review page until an admin approves them.'
+      : 'Pending reviews are currently hidden from normal users and only admins can see them.';
     renderBlockedIps(d.blocked_ips||[]);
   }catch(e){
     list.innerHTML='<div class="empty-state" style="padding:12px 0 4px;">⚠️ Could not load IP settings.</div>';
@@ -849,16 +871,19 @@ function renderBlockedIps(items){
 
 async function saveAdminSettings(){
   const enabled=document.getElementById('ip-limit-enabled').checked;
+  const showPending=document.getElementById('pending-visibility-enabled').checked;
   const maxReviews=Math.max(1,parseInt(document.getElementById('ip-limit-count').value||'5',10));
   document.getElementById('ip-limit-count').value=maxReviews;
   try{
     const d=await api('POST','/api/admin/settings',{
       token:authToken,
       ip_review_limit_enabled:enabled,
-      max_reviews_per_ip:maxReviews
+      max_reviews_per_ip:maxReviews,
+      show_pending_reviews_publicly:showPending
     });
     showToast(`⚙️ ${d.message}`,'tblue');
     await loadAdminSettings();
+    await loadPublicReviews();
   }catch(e){showToast('❌ '+e.message,'terr');}
 }
 

@@ -147,11 +147,12 @@ user_submissions: dict = defaultdict(list)     # user_id → [timestamps]
 user_review_texts: dict = defaultdict(list)    # user_id → [texts]
 ip_users: dict = defaultdict(set)              # ip → {user_ids}
 
-# Admin-configurable protection for repeated reviews from the same IP
+# Admin-configurable moderation rules
 admin_settings = {
     "ip_review_limit_enabled": True,
     "max_reviews_per_ip": 5,
     "ip_window_seconds": 600,  # 10 minutes
+    "show_pending_reviews_publicly": False,
 }
 blocked_ips: dict = {}  # ip → {blocked_at, review_count, reason}
 
@@ -240,6 +241,7 @@ class AdminSettingsRequest(BaseModel):
     token: str
     ip_review_limit_enabled: bool = True
     max_reviews_per_ip: int = 5
+    show_pending_reviews_publicly: bool = False
 
     @field_validator('max_reviews_per_ip')
     @classmethod
@@ -578,7 +580,11 @@ async def logout(req: AdminActionRequest):
 # ─── ROUTES: REVIEWS ─────────────────────────────────────────────────────────
 @app.get("/api/reviews")
 async def get_reviews():
-    """Public endpoint: show approved and pending reviews, but hide spam."""
+    """Public endpoint: show approved reviews and optionally pending reviews based on the admin setting."""
+    show_pending = bool(admin_settings.get("show_pending_reviews_publicly", False))
+    visible_statuses = {"approved", "pending"} if show_pending else {"approved"}
+    visibility_label = "Approved + Pending" if show_pending else "Approved Only"
+
     visible_reviews = [
         {
             "id":      r["id"],
@@ -588,9 +594,14 @@ async def get_reviews():
             "status":  r["status"],
         }
         for r in reviews_db
-        if r["status"] in {"approved", "pending"}
+        if r["status"] in visible_statuses
     ]
-    return {"reviews": visible_reviews, "total": len(visible_reviews)}
+    return {
+        "reviews": visible_reviews,
+        "total": len(visible_reviews),
+        "pending_visible": show_pending,
+        "visibility_label": visibility_label,
+    }
 
 
 @app.post("/api/reviews", status_code=201)
@@ -654,12 +665,17 @@ async def submit_review(req: ReviewRequest, request: Request):
         }
         reviews_db.insert(0, review)
 
+    pending_visible = bool(admin_settings.get("show_pending_reviews_publicly", False))
+
     if result.get("blocked_by_ip_policy"):
         message = f"Review blocked: this IP has crossed the admin limit of {admin_settings['max_reviews_per_ip']} reviews."
     elif review["status"] == "spam":
         message = "This review was removed automatically by the trained spam model."
     elif review["status"] == "pending":
-        message = "Review submitted and sent to admin review because it looks suspicious."
+        if pending_visible:
+            message = "Review submitted and shown as pending on the review page until admin approval."
+        else:
+            message = "Review submitted and kept in the admin-only pending queue until approval."
     else:
         message = "Review submitted and approved! It is now visible on the review page."
 
@@ -670,7 +686,8 @@ async def submit_review(req: ReviewRequest, request: Request):
         "is_spam":  review["spam"],
         "ml_score": review["ml_score"],
         "flags":    review["flags"],
-        "message":  message
+        "message":  message,
+        "pending_visible": pending_visible,
     }
 
 
@@ -846,6 +863,7 @@ async def admin_get_settings(token: str):
     return {
         "ip_review_limit_enabled": admin_settings["ip_review_limit_enabled"],
         "max_reviews_per_ip": admin_settings["max_reviews_per_ip"],
+        "show_pending_reviews_publicly": admin_settings.get("show_pending_reviews_publicly", False),
         "window_minutes": admin_settings["ip_window_seconds"] // 60,
         "blocked_ips": blocked_list,
     }
@@ -858,12 +876,19 @@ async def admin_update_settings(req: AdminSettingsRequest):
     with db_lock:
         admin_settings["ip_review_limit_enabled"] = req.ip_review_limit_enabled
         admin_settings["max_reviews_per_ip"] = req.max_reviews_per_ip
+        admin_settings["show_pending_reviews_publicly"] = req.show_pending_reviews_publicly
 
     state = "enabled" if admin_settings["ip_review_limit_enabled"] else "disabled"
+    pending_state = (
+        "visible on the user review page"
+        if admin_settings["show_pending_reviews_publicly"]
+        else "hidden from users until admin approval"
+    )
     return {
-        "message": f"IP review protection {state}. Limit set to {admin_settings['max_reviews_per_ip']}.",
+        "message": f"IP review protection {state}. Pending reviews are now {pending_state}.",
         "ip_review_limit_enabled": admin_settings["ip_review_limit_enabled"],
         "max_reviews_per_ip": admin_settings["max_reviews_per_ip"],
+        "show_pending_reviews_publicly": admin_settings["show_pending_reviews_publicly"],
         "window_minutes": admin_settings["ip_window_seconds"] // 60,
     }
 
