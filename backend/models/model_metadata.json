@@ -1,0 +1,29 @@
+{
+  "trained_at": "2026-03-31T11:56:05.074047+00:00",
+  "dataset_source": "16 CSV files (dataset_3.csv, reviews_10000 (2).csv, reviews_5000 (1).csv, +13 more)",
+  "dataset_sources": [
+    "C:\\Users\\D.praveen\\Downloads\\dataset_3.csv",
+    "C:\\Users\\D.praveen\\Downloads\\reviews_10000 (2).csv",
+    "C:\\Users\\D.praveen\\Downloads\\reviews_5000 (1).csv",
+    "C:\\Users\\D.praveen\\Downloads\\fake_spam_5000 (1).csv",
+    "C:\\Users\\D.praveen\\Downloads\\dataset_3 (1).csv",
+    "C:\\Users\\D.praveen\\Downloads\\dataset_2 (1).csv",
+    "C:\\Users\\D.praveen\\Downloads\\dataset_1 (1).csv",
+    "C:\\Users\\D.praveen\\Downloads\\dataset_10.csv",
+    "C:\\Users\\D.praveen\\Downloads\\dataset_9.csv",
+    "C:\\Users\\D.praveen\\Downloads\\dataset_9 (1).csv",
+    "C:\\Users\\D.praveen\\Downloads\\dataset_8.csv",
+    "C:\\Users\\D.praveen\\Downloads\\dataset_7.csv",
+    "C:\\Users\\D.praveen\\Downloads\\dataset_6.csv",
+    "C:\\Users\\D.praveen\\Downloads\\dataset_5.csv",
+    "C:\\Users\\D.praveen\\Downloads\\dataset_4 (1).csv",
+    "C:\\Users\\D.praveen\\Downloads\\dataset_4.csv"
+  ],
+  "dataset_count": 16,
+  "samples": 149998,
+  "spam_samples": 101754,
+  "genuine_samples": 48244,
+  "feature_count": 818,
+  "cv_f1_mean": 0.9997,
+  "cv_f1_std": 0.0
+}

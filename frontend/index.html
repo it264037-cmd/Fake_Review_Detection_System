@@ -164,7 +164,7 @@ svg{display:inline-block;vertical-align:middle;flex-shrink:0;}
 .rv-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;}
 .rv-author{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;color:var(--white);}
 .rv-text{font-size:14px;color:var(--text);margin-bottom:9px;}
-.rv-bot{display:flex;align-items:center;justify-content:space-between;}
+.rv-bot{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;}
 .rv-time{font-size:12px;color:var(--dim);}
 
 /* REVIEWS PAGE */
@@ -250,6 +250,20 @@ svg{display:inline-block;vertical-align:middle;flex-shrink:0;}
 .st-pending{background:rgba(255,255,255,.06);color:var(--muted);}
 .empty-state{text-align:center;padding:36px 20px;color:var(--dim);font-size:14px;}
 .ml-badge{display:inline-flex;align-items:center;gap:4px;background:var(--purple-bg);border:1px solid var(--purple-br);border-radius:5px;padding:2px 7px;font-size:10px;font-weight:600;color:var(--purple);margin-left:6px;}
+.settings-panel{padding:0 16px;margin-bottom:14px;}
+.settings-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;}
+.settings-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;flex-wrap:wrap;}
+.settings-title{font-size:13px;font-weight:700;color:var(--muted);letter-spacing:.3px;}
+.settings-grid{display:grid;grid-template-columns:1.2fr .8fr;gap:12px;align-items:end;}
+.set-toggle{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--border2);border-radius:10px;padding:12px;color:var(--text);font-size:13px;font-weight:600;}
+.set-toggle input{width:16px;height:16px;accent-color:var(--blue);}
+.set-num label{display:block;font-size:11.5px;font-weight:600;color:var(--muted);margin-bottom:6px;}
+.set-num input{width:100%;background:var(--card);border:1.5px solid var(--border2);border-radius:8px;padding:10px 12px;color:var(--text);font-family:'Inter',sans-serif;font-size:13px;outline:none;}
+.set-note{font-size:12px;color:var(--muted);line-height:1.6;margin-top:10px;}
+.blocked-list{margin-top:12px;display:flex;flex-direction:column;gap:8px;}
+.blocked-item{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--card);border:1px solid var(--border2);border-radius:10px;padding:10px 12px;flex-wrap:wrap;}
+.blocked-meta{font-size:12px;color:var(--muted);line-height:1.6;}
+.blocked-ip{font-size:13px;font-weight:700;color:var(--white);}
 
 /* API STATUS */
 .api-status{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);padding:0 16px;margin-bottom:8px;}
@@ -290,9 +304,9 @@ const API = 'http://127.0.0.1:8000'; // Backend running on port 8000
     <div class="sc-body">
       In a terminal, navigate to the <strong>backend/</strong> folder and run:<br><br>
       <div class="code-box">pip install -r requirements.txt
-python train_model.py
+python train_model.py "C:\Users\D.praveen\Downloads\train_8000.csv"
 uvicorn app:app --reload --port 8000</div>
-      The API will be live at <strong>http://localhost:8000</strong><br>
+      The API will be live at <strong>http://localhost:8000</strong> and will use your <strong>train_8000.csv</strong> spam-review dataset.<br>
       Swagger docs: <strong>http://localhost:8000/docs</strong>
     </div>
   </div>
@@ -429,7 +443,7 @@ uvicorn app:app --reload --port 8000</div>
       <button class="subbtn" id="sub-btn" onclick="submitReview()"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Submit Review</button></div>
     </div>
     <div class="rv-wrap">
-      <div class="rv-head" id="d-rv-head" onclick="openReviewsPage()">Approved Reviews (0) <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>
+      <div class="rv-head" id="d-rv-head" onclick="openReviewsPage()">Visible Reviews (Approved + Pending) (0) <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>
       <div id="rv-list"></div>
     </div>
   </div>
@@ -475,6 +489,36 @@ uvicorn app:app --reload --port 8000</div>
       </div>
     </div>
 
+    <div class="settings-panel">
+      <div class="settings-card">
+        <div class="settings-head">
+          <div class="settings-title">⚙️ ADMIN IP PROTECTION SETTINGS</div>
+          <button class="bulk-btn" onclick="loadAdminSettings()">Refresh</button>
+        </div>
+        <div class="settings-grid">
+          <label class="set-toggle">
+            <input type="checkbox" id="ip-limit-enabled">
+            <span>Enable blocking when one IP posts too many reviews</span>
+          </label>
+          <div class="set-num">
+            <label for="ip-limit-count">Max reviews from one IP</label>
+            <input type="number" id="ip-limit-count" min="1" max="50" value="5">
+          </div>
+        </div>
+        <div class="set-note" id="ip-limit-note">If one IP sends more than 5 reviews in 10 minutes, new reviews from that IP are blocked automatically.</div>
+        <div class="set-num" style="margin-top:12px;">
+          <label for="retrain-dataset-path">Training CSV paths (one per line)</label>
+          <textarea id="retrain-dataset-path" style="width:100%;min-height:92px;background:var(--card);border:1.5px solid var(--border2);border-radius:8px;padding:10px 12px;color:var(--text);font-family:'Inter',sans-serif;font-size:13px;resize:vertical;outline:none;" placeholder="C:\Users\D.praveen\Downloads\reviews_10000 (2).csv&#10;C:\Users\D.praveen\Downloads\dataset_4.csv&#10;C:\Users\D.praveen\Downloads\dataset_3.csv&#10;C:\Users\D.praveen\Downloads\dataset_2.csv&#10;C:\Users\D.praveen\Downloads\dataset_1.csv"></textarea>
+        </div>
+        <div class="set-note" id="model-source-note">Current model: checking dataset info…</div>
+        <div class="arv-actions" style="margin-top:12px;">
+          <button class="bulk-btn" onclick="saveAdminSettings()"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save IP Rule</button>
+          <button class="bulk-btn" id="retrain-btn" onclick="adminRetrainModel()"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10"/><path d="M3.51 15A9 9 0 0 0 18.36 18.36L23 14"/></svg> Retrain Model</button>
+        </div>
+        <div class="blocked-list" id="blocked-ip-list"></div>
+      </div>
+    </div>
+
     <div class="filter-bar">
       <span style="font-size:12px;color:var(--muted);font-weight:500;">Filter:</span>
       <button class="fbtn active" id="f-all" onclick="setFilter('all')">All</button>
@@ -502,6 +546,7 @@ let EJS_SVC = '', EJS_TPL = '', EJS_PK = '';
 let pendingUser = null, currentOTP = '', resendTick = null;
 let adminFilter = 'all';
 let reviewsCache = [];
+let adminSettings = {ip_review_limit_enabled:true,max_reviews_per_ip:5,blocked_ips:[]};
 
 /* ══ HELPERS ══ */
 function v(id){return document.getElementById(id).value.trim();}
@@ -531,7 +576,15 @@ async function checkApiStatus() {
   try {
     const data = await fetch(`${API}/api/health`).then(r=>r.json());
     document.getElementById('api-dot').className = 'api-dot ok';
-    document.getElementById('api-status-text').textContent = `ML Backend connected ${data.ml_loaded ? '(model loaded ✓)' : '(no model — run train_model.py)'}`;
+    const info = data.model_info || {};
+    if (data.ml_loaded) {
+      const sampleText = info.samples
+        ? ` — trained on ${Number(info.samples).toLocaleString()} reviews${info.dataset_count ? ` from ${info.dataset_count} CSV file${info.dataset_count>1?'s':''}` : ''}`
+        : ' — model loaded ✓';
+      document.getElementById('api-status-text').textContent = `ML Backend connected${sampleText}`;
+    } else {
+      document.getElementById('api-status-text').textContent = 'Backend connected, but no trained model yet — run python train_model.py';
+    }
   } catch(e) {
     document.getElementById('api-dot').className = 'api-dot err';
     document.getElementById('api-status-text').textContent = 'Backend offline — start: uvicorn app:app --reload --port 8000';
@@ -684,8 +737,8 @@ async function loadPublicReviews(){
     renderDash();
     const n=reviewsCache.length;
     document.getElementById('d-rcount').textContent=n+' reviews';
-    document.getElementById('d-rv-head').innerHTML=`Approved Reviews (${n}) <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>`;
-    document.getElementById('full-rv-title').textContent=`Approved Reviews (${n})`;
+    document.getElementById('d-rv-head').innerHTML=`Visible Reviews (Approved + Pending) (${n}) <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>`;
+    document.getElementById('full-rv-title').textContent=`Visible Reviews (${n})`;
   }catch(e){
     document.getElementById('rv-list').innerHTML='<div class="empty-state">⚠️ Could not load reviews — is the backend running?</div>';
   }
@@ -696,7 +749,7 @@ function buildUserCard(r,i){
   d.innerHTML=`<div class="rv-top"><div class="rv-author">@${r.author}</div></div><div class="rv-text">${r.text}</div><div class="rv-bot"><span class="rv-time">${r.time}</span></div>`;
   return d;
 }
-function renderDash(){const l=document.getElementById('rv-list');l.innerHTML='';if(!reviewsCache.length){l.innerHTML='<div class="empty-state">No approved reviews yet.</div>';return;}reviewsCache.forEach((r,i)=>l.appendChild(buildUserCard(r,i)));}
+function renderDash(){const l=document.getElementById('rv-list');l.innerHTML='';if(!reviewsCache.length){l.innerHTML='<div class="empty-state">No visible reviews yet. Approved and pending reviews will appear here.</div>';return;}reviewsCache.forEach((r,i)=>l.appendChild(buildUserCard(r,i)));}
 function renderFull(){const l=document.getElementById('full-rv-list');l.innerHTML='';reviewsCache.forEach((r,i)=>l.appendChild(buildUserCard(r,i)));}
 function openReviewsPage(){renderFull();go('reviews-page');}
 function updateCC(){document.getElementById('rv-cc').textContent=document.getElementById('rv-ta').value.length;}
@@ -711,9 +764,11 @@ async function submitReview(){
     const result=await api('POST','/api/reviews',{text,token:authToken});
     document.getElementById('rv-ta').value='';document.getElementById('rv-cc').textContent='0';
     if(result.is_spam){
-      showToast(`⚠️ Spam detected (score: ${result.score}%) — review not published`,'terr');
+      showToast(`⚠️ ${result.message}`,'terr');
+    } else if(result.status==='pending') {
+      showToast(`🕐 ${result.message}`,'tblue');
     } else {
-      showToast(`✅ Review approved! (authenticity: ${result.score}%)`,'tok');
+      showToast(`✅ ${result.message}`,'tok');
     }
     await loadPublicReviews();
   }catch(e){
@@ -727,6 +782,8 @@ async function submitReview(){
 async function initAdmin(){
   adminFilter='all';setFilterUI('all');
   await loadAdminStats();
+  await loadAdminSettings();
+  await loadModelInfo();
   await loadAdminReviews();
 }
 
@@ -748,6 +805,90 @@ async function loadAdminReviews(){
     const d=await api('GET',`/api/admin/reviews?token=${authToken}&filter=${adminFilter}`);
     renderAdminList(d.reviews||[]);
   }catch(e){document.getElementById('admin-rv-list').innerHTML='<div class="empty-state">⚠️ Could not load reviews</div>';}
+}
+
+async function loadAdminSettings(){
+  const list=document.getElementById('blocked-ip-list');
+  try{
+    const d=await api('GET',`/api/admin/settings?token=${authToken}`);
+    adminSettings=d;
+    document.getElementById('ip-limit-enabled').checked=!!d.ip_review_limit_enabled;
+    document.getElementById('ip-limit-count').value=d.max_reviews_per_ip??5;
+    document.getElementById('ip-limit-note').textContent=`If one IP sends more than ${d.max_reviews_per_ip} reviews in ${d.window_minutes||10} minutes, new reviews from that IP are blocked automatically.`;
+    renderBlockedIps(d.blocked_ips||[]);
+  }catch(e){
+    list.innerHTML='<div class="empty-state" style="padding:12px 0 4px;">⚠️ Could not load IP settings.</div>';
+  }
+}
+
+async function loadModelInfo(){
+  try{
+    const d=await fetch(`${API}/api/health`).then(r=>r.json());
+    const info=d.model_info||{};
+    const sources=Array.isArray(info.dataset_sources)&&info.dataset_sources.length ? info.dataset_sources : (info.dataset_source ? [info.dataset_source] : []);
+    const sourceLabel=info.dataset_count>1 ? `${info.dataset_count} CSV files` : (sources[0]||'no dataset selected');
+    const samples=info.samples?`${Number(info.samples).toLocaleString()} reviews`: 'model not trained yet';
+    document.getElementById('model-source-note').textContent=`Current model: ${samples} • Source: ${sourceLabel}`;
+    const input=document.getElementById('retrain-dataset-path');
+    if(input && !input.value.trim()){
+      input.value=sources.length ? sources.join('\n') : `C:\\Users\\D.praveen\\Downloads\\dataset_3.csv\nC:\\Users\\D.praveen\\Downloads\\reviews_10000 (2).csv\nC:\\Users\\D.praveen\\Downloads\\reviews_5000 (1).csv\nC:\\Users\\D.praveen\\Downloads\\fake_spam_5000 (1).csv\nC:\\Users\\D.praveen\\Downloads\\dataset_3 (1).csv\nC:\\Users\\D.praveen\\Downloads\\dataset_2 (1).csv\nC:\\Users\\D.praveen\\Downloads\\dataset_1 (1).csv\nC:\\Users\\D.praveen\\Downloads\\dataset_10.csv\nC:\\Users\\D.praveen\\Downloads\\dataset_9.csv\nC:\\Users\\D.praveen\\Downloads\\dataset_9 (1).csv\nC:\\Users\\D.praveen\\Downloads\\dataset_8.csv\nC:\\Users\\D.praveen\\Downloads\\dataset_7.csv\nC:\\Users\\D.praveen\\Downloads\\dataset_6.csv\nC:\\Users\\D.praveen\\Downloads\\dataset_5.csv\nC:\\Users\\D.praveen\\Downloads\\dataset_4 (1).csv\nC:\\Users\\D.praveen\\Downloads\\dataset_4.csv`;
+    }
+  }catch(e){
+    document.getElementById('model-source-note').textContent='Current model: backend status unavailable right now.';
+  }
+}
+
+function renderBlockedIps(items){
+  const list=document.getElementById('blocked-ip-list');
+  if(!items.length){
+    list.innerHTML='<div class="empty-state" style="padding:12px 0 4px;">No blocked IPs right now.</div>';
+    return;
+  }
+  list.innerHTML=items.map(item=>`<div class="blocked-item"><div class="blocked-meta"><div class="blocked-ip">🔒 ${item.ip}</div><div>Blocked ${item.blocked_time} • ${item.reason}</div></div><button class="act-btn act-restore" onclick="adminUnblockIp('${item.ip}')"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.9"/></svg> Unblock</button></div>`).join('');
+}
+
+async function saveAdminSettings(){
+  const enabled=document.getElementById('ip-limit-enabled').checked;
+  const maxReviews=Math.max(1,parseInt(document.getElementById('ip-limit-count').value||'5',10));
+  document.getElementById('ip-limit-count').value=maxReviews;
+  try{
+    const d=await api('POST','/api/admin/settings',{
+      token:authToken,
+      ip_review_limit_enabled:enabled,
+      max_reviews_per_ip:maxReviews
+    });
+    showToast(`⚙️ ${d.message}`,'tblue');
+    await loadAdminSettings();
+  }catch(e){showToast('❌ '+e.message,'terr');}
+}
+
+async function adminUnblockIp(ip){
+  try{
+    const d=await api('POST',`/api/admin/ip-blocks/${encodeURIComponent(ip)}/remove`,{token:authToken});
+    showToast(`🔓 ${d.ip} unblocked`,'tblue');
+    await initAdmin();
+  }catch(e){showToast('❌ '+e.message,'terr');}
+}
+
+async function adminRetrainModel(){
+  const datasetText=document.getElementById('retrain-dataset-path').value.trim();
+  const datasetPaths=datasetText.split(/\r?\n|;/).map(s=>s.trim()).filter(Boolean);
+  const btn=document.getElementById('retrain-btn');
+  const original=btn.innerHTML;
+  spinBtn('retrain-btn','Retraining model...');
+  try{
+    const d=await api('POST','/api/admin/retrain',{
+      token:authToken,
+      dataset_paths:datasetPaths.length ? datasetPaths : null
+    });
+    const info=d.model_info||{};
+    showToast(`🧠 Model retrained in ${d.seconds}s using ${info.samples||0} reviews from ${info.dataset_count||datasetPaths.length||1} file(s)`,'tblue');
+    await loadModelInfo();
+    await initAdmin();
+  }catch(e){
+    showToast('❌ '+e.message,'terr');
+  }
+  restoreBtn('retrain-btn',original);
 }
 
 /* ═ ANALYTICS CHARTS ═ */

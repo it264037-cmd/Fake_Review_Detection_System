@@ -14,6 +14,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr, field_validator
 from typing import Optional, List
 from datetime import datetime, timedelta
+import json
 import numpy as np
 import joblib
 import re
@@ -28,9 +29,11 @@ import threading
 # Backward-compatible joblib loading for locally trained custom artifacts
 try:
     import __main__ as _main
+    import train_model as _train_model_module
     from train_model import ReviewFeatureExtractor as _ReviewFeatureExtractor
     _main.ReviewFeatureExtractor = _ReviewFeatureExtractor
 except Exception:
+    _train_model_module = None
     pass
 
 
@@ -55,6 +58,18 @@ security = HTTPBearer(auto_error=False)
 # ─── LOAD ML ARTIFACTS ──────────────────────────────────────────────────────
 MODEL_DIR = os.path.join(os.path.dirname(__file__), "models")
 
+def load_model_metadata() -> dict:
+    metadata_path = os.path.join(MODEL_DIR, "model_metadata.json")
+    try:
+        with open(metadata_path, "r", encoding="utf-8") as fh:
+            return json.load(fh)
+    except FileNotFoundError:
+        return {}
+    except Exception as exc:
+        print(f"[WARN] Could not load model metadata: {exc}")
+        return {}
+
+
 def load_models():
     try:
         clf       = joblib.load(os.path.join(MODEL_DIR, "spam_classifier.pkl"))
@@ -67,6 +82,55 @@ def load_models():
         return None, None, None
 
 classifier, tfidf_vec, feat_extractor = load_models()
+model_metadata = load_model_metadata()
+model_lock = threading.Lock()
+
+
+def prepare_review_text(text: str) -> str:
+    text = "" if text is None else str(text)
+    text = re.sub(r"\b\d{5,}\b", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+def normalize_review_text(text: str) -> str:
+    """Normalize review text for stable comparisons."""
+    return prepare_review_text(text).lower()
+
+
+def build_training_spam_texts() -> set:
+    training_data = getattr(_train_model_module, "TRAINING_DATA", []) if _train_model_module else []
+    return {
+        normalize_review_text(text)
+        for text, label in training_data
+        if label == 1 and str(text).strip()
+    }
+
+
+TRAINING_SPAM_TEXTS = build_training_spam_texts()
+
+
+def refresh_model_artifacts():
+    global classifier, tfidf_vec, feat_extractor, model_metadata, TRAINING_SPAM_TEXTS
+    classifier, tfidf_vec, feat_extractor = load_models()
+    model_metadata = load_model_metadata()
+    TRAINING_SPAM_TEXTS = build_training_spam_texts()
+
+
+def current_model_info() -> dict:
+    dataset_sources = model_metadata.get("dataset_sources") or (
+        [model_metadata.get("dataset_source")] if model_metadata.get("dataset_source") else []
+    )
+    return {
+        "trained_at": model_metadata.get("trained_at"),
+        "dataset_source": model_metadata.get("dataset_source"),
+        "dataset_sources": dataset_sources,
+        "dataset_count": model_metadata.get("dataset_count", len(dataset_sources)),
+        "samples": model_metadata.get("samples", 0),
+        "spam_samples": model_metadata.get("spam_samples", 0),
+        "genuine_samples": model_metadata.get("genuine_samples", 0),
+        "cv_f1_mean": model_metadata.get("cv_f1_mean"),
+    }
 
 
 # ─── IN-MEMORY DATA STORE ───────────────────────────────────────────────────
@@ -82,6 +146,14 @@ ip_submissions: dict = defaultdict(list)       # ip → [timestamps]
 user_submissions: dict = defaultdict(list)     # user_id → [timestamps]
 user_review_texts: dict = defaultdict(list)    # user_id → [texts]
 ip_users: dict = defaultdict(set)              # ip → {user_ids}
+
+# Admin-configurable protection for repeated reviews from the same IP
+admin_settings = {
+    "ip_review_limit_enabled": True,
+    "max_reviews_per_ip": 5,
+    "ip_window_seconds": 600,  # 10 minutes
+}
+blocked_ips: dict = {}  # ip → {blocked_at, review_count, reason}
 
 # Seed demo data
 reviews_db = [
@@ -164,6 +236,42 @@ class AdminActionRequest(BaseModel):
     token: str
 
 
+class AdminSettingsRequest(BaseModel):
+    token: str
+    ip_review_limit_enabled: bool = True
+    max_reviews_per_ip: int = 5
+
+    @field_validator('max_reviews_per_ip')
+    @classmethod
+    def max_reviews_in_range(cls, v):
+        if v < 1 or v > 50:
+            raise ValueError('Max reviews per IP must be between 1 and 50')
+        return v
+
+
+class RetrainModelRequest(BaseModel):
+    token: str
+    dataset_path: Optional[str] = None
+    dataset_paths: Optional[List[str]] = None
+
+    @field_validator('dataset_path')
+    @classmethod
+    def normalize_dataset_path(cls, v):
+        if v is None:
+            return None
+        value = v.strip()
+        return value or None
+
+    @field_validator('dataset_paths')
+    @classmethod
+    def normalize_dataset_paths(cls, v):
+        if v is None:
+            return None
+        items = v if isinstance(v, list) else re.split(r"[;\r\n]+", str(v))
+        cleaned = [str(item).strip() for item in items if str(item).strip()]
+        return cleaned or None
+
+
 # ─── AUTH HELPERS ────────────────────────────────────────────────────────────
 ADMIN_EMAIL    = "admin@reviewguard.com"
 ADMIN_PASSWORD = "admin123"
@@ -239,18 +347,19 @@ def detect_spam(
 ) -> dict:
     """
     Multi-layer spam detection:
-    1. ML model score (gradient boosting ensemble)
-    2. Behavioral analysis (frequency, rate limiting)
-    3. Duplicate detection (cosine similarity)
+    1. ML model score
+    2. Behavioral analysis
+    3. Duplicate detection
     4. Rule-based pattern detection
-    Returns a result dict with score (0-100), flags, and spam decision.
+    Returns score (0-100), flags, and moderation status.
     """
+    clean_text = prepare_review_text(text)
     flags = []
     penalties = 0.0
     now = time.time()
 
     # ── 1. LENGTH CHECK ──────────────────────────────────────────────────────
-    word_count = len(text.split())
+    word_count = len(clean_text.split())
     if word_count < 3:
         flags.append("Review is too short (under 3 words)")
         penalties += 40
@@ -262,27 +371,27 @@ def detect_spam(
     ml_prob = 0.5
     if classifier and tfidf_vec and feat_extractor:
         try:
-            eng_feats = feat_extractor.to_array(text).reshape(1, -1)
-            tfidf_feats = tfidf_vec.transform([text]).toarray()
+            eng_feats = feat_extractor.to_array(clean_text).reshape(1, -1)
+            tfidf_feats = tfidf_vec.transform([clean_text]).toarray()
             X = np.hstack([eng_feats, tfidf_feats])
-            ml_prob = float(classifier.predict_proba(X)[0][1])  # P(spam)
+            ml_prob = float(classifier.predict_proba(X)[0][1])
         except Exception as e:
             print(f"ML error: {e}")
 
     if ml_prob >= 0.75:
-        flags.append(f"ML model flagged as spam ({int(ml_prob*100)}% confidence)")
+        flags.append(f"ML model flagged as spam ({int(ml_prob * 100)}% confidence)")
         penalties += 30
     elif ml_prob >= 0.55:
         flags.append("ML model suspects spam content")
         penalties += 15
 
     # ── 3. PATTERN RULES ─────────────────────────────────────────────────────
-    caps_ratio = sum(1 for c in text if c.isupper()) / max(len(text), 1)
-    excl_count = text.count('!')
-    url_hits   = len(re.findall(r'https?://|www\.|\.com|\.net', text, re.I))
-    spam_kw    = SPAM_KEYWORDS.findall(text)
+    caps_ratio = sum(1 for c in clean_text if c.isupper()) / max(len(clean_text), 1)
+    excl_count = clean_text.count('!')
+    url_hits = len(re.findall(r'https?://|www\.|\.com|\.net', clean_text, re.I))
+    spam_kw = SPAM_KEYWORDS.findall(clean_text)
 
-    if caps_ratio > 0.65 and len(text) > 5:
+    if caps_ratio > 0.65 and len(clean_text) > 5:
         flags.append("Excessive capitalization (shouting)")
         penalties += 20
     if excl_count >= 4:
@@ -295,8 +404,7 @@ def detect_spam(
         flags.append(f"Spam keywords detected: {', '.join(set(spam_kw[:3]))}")
         penalties += 35
 
-    # Repeated word detection
-    words = text.lower().split()
+    words = clean_text.lower().split()
     if len(words) > 3:
         unique_ratio = len(set(words)) / len(words)
         if unique_ratio < 0.4:
@@ -304,23 +412,25 @@ def detect_spam(
             penalties += 25
 
     # ── 4. BEHAVIORAL ANALYSIS ───────────────────────────────────────────────
-    # Rate limit: max 3 reviews per 5 minutes per user
-    window = 300  # 5 min
+    window = 300
     user_subs = [t for t in user_submissions[user_id] if now - t < window]
     if len(user_subs) >= 3:
-        flags.append(f"Too many reviews in short time ({len(user_subs)+1} in 5 min)")
+        flags.append(f"Too many reviews in short time ({len(user_subs) + 1} in 5 min)")
         penalties += 30
     elif len(user_subs) >= 2:
         flags.append("High submission frequency detected")
         penalties += 10
 
-    # IP-based rate limiting: max 5 reviews per 10 minutes per IP
-    ip_subs = [t for t in ip_submissions[ip] if now - t < 600]
-    if len(ip_subs) >= 5:
-        flags.append(f"IP address submitting too many reviews")
-        penalties += 25
+    ip_window_seconds = max(60, int(admin_settings.get("ip_window_seconds", 600)))
+    max_reviews_per_ip = max(1, int(admin_settings.get("max_reviews_per_ip", 5)))
+    ip_limit_enabled = bool(admin_settings.get("ip_review_limit_enabled", True))
+    ip_subs = [t for t in ip_submissions[ip] if now - t < ip_window_seconds]
+    if ip_limit_enabled and len(ip_subs) >= max_reviews_per_ip:
+        flags.append(
+            f"IP exceeded admin limit ({len(ip_subs) + 1}/{max_reviews_per_ip} reviews in {ip_window_seconds // 60} min)"
+        )
+        penalties += 60
 
-    # Multiple accounts from same IP
     ip_user_count = len(ip_users[ip])
     if ip_user_count >= 3:
         flags.append(f"IP shared by {ip_user_count} different accounts")
@@ -328,22 +438,20 @@ def detect_spam(
 
     # ── 5. DUPLICATE DETECTION ───────────────────────────────────────────────
     exact_matches = 0
-    near_matches  = 0
-    
+    near_matches = 0
+
     if tfidf_vec:
         try:
-            new_vec = tfidf_vec.transform([text]).toarray()[0]
+            new_vec = tfidf_vec.transform([clean_text]).toarray()[0]
         except Exception:
             new_vec = None
     else:
         new_vec = None
 
     for r in existing_reviews:
-        existing_text = r.get("text", "")
-        # Exact match
-        if existing_text.strip().lower() == text.strip().lower():
+        existing_text = prepare_review_text(r.get("text", ""))
+        if existing_text.lower() == clean_text.lower():
             exact_matches += 1
-        # Near-duplicate via cosine similarity
         elif new_vec is not None and tfidf_vec:
             try:
                 ex_vec = tfidf_vec.transform([existing_text]).toarray()[0]
@@ -354,25 +462,59 @@ def detect_spam(
                 pass
 
     if exact_matches > 0:
-        flags.append(f"Exact duplicate detected ({exact_matches} identical review{'s' if exact_matches>1 else ''})")
+        flags.append(f"Exact duplicate detected ({exact_matches} identical review{'s' if exact_matches > 1 else ''})")
         penalties += 35
     elif near_matches > 0:
-        flags.append(f"Near-duplicate content ({near_matches} very similar review{'s' if near_matches>1 else ''})")
+        flags.append(f"Near-duplicate content ({near_matches} very similar review{'s' if near_matches > 1 else ''})")
         penalties += 20
 
     # ── 6. COMPUTE FINAL SCORE ───────────────────────────────────────────────
-    # Score = 100 (genuine) minus penalties, floored at 0
     raw_score = max(0, 100 - penalties)
-    # Blend with ML: weight towards lower score if ML says spam
     blended_score = int(raw_score * (1 - ml_prob * 0.4))
-    final_score   = max(0, min(100, blended_score))
-    is_spam       = final_score < 50 or penalties >= 40
+    final_score = max(0, min(100, blended_score))
+
+    # ── DECISION LOGIC ───────────────────────────────────────────────────────
+    normalized_text = normalize_review_text(clean_text)
+    matched_training_spam = normalized_text in TRAINING_SPAM_TEXTS
+    ip_already_blocked = bool(ip_limit_enabled and ip in blocked_ips)
+    ip_limit_hit = bool(ip_limit_enabled and len(ip_subs) >= max_reviews_per_ip)
+    high_confidence_spam = ml_prob >= 0.80
+    score_too_low = final_score <= 35
+    strong_rule_match = penalties >= 55 and len(flags) >= 2
+
+    if matched_training_spam:
+        flags.append("Matched a spam example from the training dataset")
+    if ip_already_blocked:
+        flags.append("This IP is blocked by the admin review policy")
+    elif ip_limit_hit:
+        flags.append(f"This IP has been blocked after more than {max_reviews_per_ip} reviews")
+    if high_confidence_spam and not matched_training_spam:
+        flags.append("Auto-blocked by the trained spam model")
+    elif score_too_low and not (ip_already_blocked or ip_limit_hit):
+        flags.append("Blocked due to very low authenticity score")
+
+    flags = list(dict.fromkeys(flags))
+
+    is_spam = any([
+        matched_training_spam,
+        ip_already_blocked,
+        ip_limit_hit,
+        high_confidence_spam,
+        score_too_low,
+        strong_rule_match,
+    ])
+    status = "spam" if is_spam else "pending" if (ml_prob >= 0.55 or final_score < 60 or len(flags) >= 2) else "approved"
 
     return {
-        "score":    final_score,
-        "ml_prob":  round(ml_prob, 3),
-        "flags":    flags,
-        "is_spam":  is_spam,
+        "score": final_score,
+        "ml_prob": round(ml_prob, 3),
+        "flags": flags,
+        "status": status,
+        "is_spam": is_spam,
+        "matched_training_spam": matched_training_spam,
+        "blocked_by_ip_policy": ip_already_blocked or ip_limit_hit,
+        "ip_limit_hit": ip_limit_hit,
+        "high_confidence_spam": high_confidence_spam,
         "penalties": penalties,
     }
 
@@ -436,8 +578,8 @@ async def logout(req: AdminActionRequest):
 # ─── ROUTES: REVIEWS ─────────────────────────────────────────────────────────
 @app.get("/api/reviews")
 async def get_reviews():
-    """Public endpoint: only approved reviews visible to users."""
-    approved = [
+    """Public endpoint: show approved and pending reviews, but hide spam."""
+    visible_reviews = [
         {
             "id":      r["id"],
             "author":  r["author"],
@@ -446,9 +588,9 @@ async def get_reviews():
             "status":  r["status"],
         }
         for r in reviews_db
-        if r["status"] == "approved"
+        if r["status"] in {"approved", "pending"}
     ]
-    return {"reviews": approved, "total": len(approved)}
+    return {"reviews": visible_reviews, "total": len(visible_reviews)}
 
 
 @app.post("/api/reviews", status_code=201)
@@ -471,27 +613,39 @@ async def submit_review(req: ReviewRequest, request: Request):
         author = "Admin"
     
     with db_lock:
+        now = time.time()
+
         # Run spam detection
         result = detect_spam(req.text, user_id, ip, reviews_db)
-        
+
+        if result.get("ip_limit_hit"):
+            current_count = len([
+                t for t in ip_submissions[ip]
+                if now - t < int(admin_settings.get("ip_window_seconds", 600))
+            ]) + 1
+            blocked_ips[ip] = {
+                "blocked_at": now,
+                "review_count": current_count,
+                "reason": f"Exceeded {admin_settings['max_reviews_per_ip']} reviews from the same IP",
+            }
+
         # Update behavioral tracking
-        now = time.time()
         user_submissions[user_id].append(now)
         ip_submissions[ip].append(now)
         ip_users[ip].add(user_id)
         user_review_texts[user_id].append(req.text)
-        
-        # Create review record — status driven by spam detection
+
+        # Create review record using the moderation status returned by the detector
         review_counter["n"] += 1
-        status = "spam" if result["is_spam"] else "approved"
+        status = result["status"]
         review = {
             "id":         review_counter["n"],
             "author":     author,
             "author_id":  user_id,
             "text":       req.text,
             "time":       "just now",
-            "status":     status,        # Correctly set by ML + behavioral analysis
-            "spam":       result["is_spam"],
+            "status":     status,
+            "spam":       status == "spam",
             "score":      result["score"],
             "ml_score":   result["ml_prob"],
             "flags":      result["flags"],
@@ -499,17 +653,22 @@ async def submit_review(req: ReviewRequest, request: Request):
             "ip":         ip,
         }
         reviews_db.insert(0, review)
-    
-    if result["is_spam"]:
-        message = "Your review was flagged as spam and will not be shown publicly."
+
+    if result.get("blocked_by_ip_policy"):
+        message = f"Review blocked: this IP has crossed the admin limit of {admin_settings['max_reviews_per_ip']} reviews."
+    elif review["status"] == "spam":
+        message = "This review was removed automatically by the trained spam model."
+    elif review["status"] == "pending":
+        message = "Review submitted and sent to admin review because it looks suspicious."
     else:
-        message = "Review submitted and approved!"
+        message = "Review submitted and approved! It is now visible on the review page."
 
     return {
         "id":       review["id"],
         "status":   review["status"],
         "score":    review["score"],
         "is_spam":  review["spam"],
+        "ml_score": review["ml_score"],
         "flags":    review["flags"],
         "message":  message
     }
@@ -665,6 +824,93 @@ async def bulk_delete_spam(req: AdminActionRequest):
     return {"message": f"Deleted {spam_count} spam reviews", "count": spam_count}
 
 
+@app.get("/api/admin/settings")
+async def admin_get_settings(token: str):
+    require_admin(token)
+
+    blocked_list = [
+        {
+            "ip": ip,
+            "blocked_at": datetime.fromtimestamp(data["blocked_at"]).isoformat(),
+            "blocked_time": fmt_time(data["blocked_at"]),
+            "review_count": data.get("review_count", 0),
+            "reason": data.get("reason", "Exceeded the IP review policy"),
+        }
+        for ip, data in sorted(
+            blocked_ips.items(),
+            key=lambda item: item[1].get("blocked_at", 0),
+            reverse=True,
+        )
+    ]
+
+    return {
+        "ip_review_limit_enabled": admin_settings["ip_review_limit_enabled"],
+        "max_reviews_per_ip": admin_settings["max_reviews_per_ip"],
+        "window_minutes": admin_settings["ip_window_seconds"] // 60,
+        "blocked_ips": blocked_list,
+    }
+
+
+@app.post("/api/admin/settings")
+async def admin_update_settings(req: AdminSettingsRequest):
+    require_admin(req.token)
+
+    with db_lock:
+        admin_settings["ip_review_limit_enabled"] = req.ip_review_limit_enabled
+        admin_settings["max_reviews_per_ip"] = req.max_reviews_per_ip
+
+    state = "enabled" if admin_settings["ip_review_limit_enabled"] else "disabled"
+    return {
+        "message": f"IP review protection {state}. Limit set to {admin_settings['max_reviews_per_ip']}.",
+        "ip_review_limit_enabled": admin_settings["ip_review_limit_enabled"],
+        "max_reviews_per_ip": admin_settings["max_reviews_per_ip"],
+        "window_minutes": admin_settings["ip_window_seconds"] // 60,
+    }
+
+
+@app.post("/api/admin/ip-blocks/{ip}/remove")
+async def admin_unblock_ip(ip: str, req: AdminActionRequest):
+    require_admin(req.token)
+
+    with db_lock:
+        removed = blocked_ips.pop(ip, None)
+
+    if not removed:
+        raise HTTPException(status_code=404, detail="IP block not found")
+
+    return {"message": f"IP {ip} unblocked", "ip": ip}
+
+
+@app.post("/api/admin/retrain")
+async def admin_retrain_model(req: RetrainModelRequest):
+    require_admin(req.token)
+
+    if _train_model_module is None:
+        raise HTTPException(status_code=500, detail="Training module is unavailable on the server")
+
+    acquired = model_lock.acquire(blocking=False)
+    if not acquired:
+        raise HTTPException(status_code=409, detail="Model retraining is already running")
+
+    try:
+        requested_paths = req.dataset_paths if req.dataset_paths else req.dataset_path
+        start_time = time.time()
+        _train_model_module.train(requested_paths)
+        refresh_model_artifacts()
+        elapsed = round(time.time() - start_time, 2)
+        return {
+            "message": "Model retrained successfully",
+            "seconds": elapsed,
+            "model_info": current_model_info(),
+        }
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Retraining failed: {exc}") from exc
+    finally:
+        model_lock.release()
+
+
 # ─── HEALTH CHECK ────────────────────────────────────────────────────────────
 @app.get("/api/health")
 async def health():
@@ -673,7 +919,8 @@ async def health():
         "ml_loaded":   classifier is not None,
         "users":       len(users_db),
         "reviews":     len(reviews_db),
-        "timestamp":   datetime.utcnow().isoformat()
+        "timestamp":   datetime.utcnow().isoformat(),
+        "model_info": current_model_info(),
     }
 
 
